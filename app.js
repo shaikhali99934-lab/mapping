@@ -1,5 +1,18 @@
-// GeoSync Mobile Field Data Integration Logic
+// GeoSync Mobile & Offline Field Data Integration Logic
 document.addEventListener('DOMContentLoaded', () => {
+  // Register Service Worker for Complete Offline App Availability
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js')
+        .then((reg) => {
+          console.log('GeoSync ServiceWorker registered:', reg.scope);
+        })
+        .catch((err) => {
+          console.warn('GeoSync ServiceWorker registration failed:', err);
+        });
+    });
+  }
+
   // Elements
   const form = document.getElementById('dataEntryForm');
   const centerCodeInput = document.getElementById('fieldCenterCode');
@@ -13,10 +26,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const previewMapLink = document.getElementById('previewMapLink');
 
   const submitBtn = document.getElementById('submitBtn');
+  const submitBtnText = document.getElementById('submitBtnText');
   const resetBtn = document.getElementById('resetBtn');
 
-  // Status & Headers
-  const connectionStatus = document.getElementById('connectionStatus');
+  // Network & Offline Status Elements
+  const networkStatusPill = document.getElementById('networkStatusPill');
+  const networkStatusText = document.getElementById('networkStatusText');
+  const offlineNoticeBanner = document.getElementById('offlineNoticeBanner');
+  const syncNowBtn = document.getElementById('syncNowBtn');
+  const pendingCountHeader = document.getElementById('pendingCountHeader');
+  const syncTableBtn = document.getElementById('syncTableBtn');
+
+  // Other UI Elements
   const sheetTargetDisplay = document.getElementById('sheetTargetDisplay');
   const setupPromptBanner = document.getElementById('setupPromptBanner');
   const bannerSetupBtn = document.getElementById('bannerSetupBtn');
@@ -75,7 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
     var coordinates = data.coordinates || data.Coordinates || '';
     var timestamp = new Date().toLocaleString();
 
-    // Appends matching your headers: Center_Code | Reg No | Coordinates | Timestamp
+    // Appends: Center_Code | Reg No | Coordinates | Timestamp
     sheet.appendRow([centerCode, regNo, coordinates, timestamp]);
 
     return ContentService
@@ -105,10 +126,13 @@ function doGet(e) {
   // Local Storage Keys
   const STORAGE_URL_KEY = 'geosync_script_url';
   const STORAGE_HISTORY_KEY = 'geosync_submissions_history';
+  const STORAGE_QUEUE_KEY = 'geosync_offline_queue';
 
   // State
   let scriptUrl = localStorage.getItem(STORAGE_URL_KEY) || '';
   let submissions = [];
+  let offlineQueue = [];
+  let isSyncing = false;
 
   try {
     submissions = JSON.parse(localStorage.getItem(STORAGE_HISTORY_KEY)) || [];
@@ -116,12 +140,19 @@ function doGet(e) {
     submissions = [];
   }
 
-  // Initial Setup
-  updateConnectionBadge();
+  try {
+    offlineQueue = JSON.parse(localStorage.getItem(STORAGE_QUEUE_KEY)) || [];
+  } catch (e) {
+    offlineQueue = [];
+  }
+
+  // Initial State Setup
+  updateNetworkStatus();
+  updateSyncBadges();
   renderHistoryTable();
   initMobileTabs();
 
-  // Show setup banner if URL is missing (helps new users!)
+  // Show setup banner if URL is missing
   if (!scriptUrl) {
     setupPromptBanner.style.display = 'flex';
   } else {
@@ -134,11 +165,106 @@ function doGet(e) {
     openModal(settingsModal);
   });
 
+  // ================= ONLINE / OFFLINE NETWORK LISTENERS =================
+  window.addEventListener('online', () => {
+    updateNetworkStatus();
+    showToast('Internet connection restored! Ready to sync.', 'success');
+    autoSyncQueue();
+  });
+
+  window.addEventListener('offline', () => {
+    updateNetworkStatus();
+    showToast('You are offline. Entries will be saved to your phone.', 'info');
+  });
+
+  function updateNetworkStatus() {
+    const isOnline = navigator.onLine;
+    if (isOnline) {
+      networkStatusPill.className = 'network-pill online';
+      networkStatusText.textContent = 'Online';
+      offlineNoticeBanner.style.display = 'none';
+      if (submitBtnText) submitBtnText.textContent = 'Submit to Google Sheet';
+    } else {
+      networkStatusPill.className = 'network-pill offline';
+      networkStatusText.textContent = 'Offline';
+      offlineNoticeBanner.style.display = 'flex';
+      if (submitBtnText) submitBtnText.textContent = 'Save to Offline Queue';
+    }
+  }
+
+  function updateSyncBadges() {
+    const count = offlineQueue.length;
+    if (count > 0) {
+      syncNowBtn.style.display = 'inline-flex';
+      pendingCountHeader.textContent = count;
+      syncTableBtn.style.display = 'inline-flex';
+      syncTableBtn.textContent = `Sync (${count}) Pending`;
+    } else {
+      syncNowBtn.style.display = 'none';
+      syncTableBtn.style.display = 'none';
+    }
+  }
+
+  // ================= SYNC OFFLINE QUEUE =================
+  syncNowBtn.addEventListener('click', autoSyncQueue);
+  syncTableBtn.addEventListener('click', autoSyncQueue);
+
+  async function autoSyncQueue() {
+    if (isSyncing || offlineQueue.length === 0) return;
+
+    if (!navigator.onLine) {
+      showToast('Cannot sync while offline. Connect to Wi-Fi/data first.', 'error');
+      return;
+    }
+
+    if (!scriptUrl) {
+      showToast('Configure your Google Sheet Web App URL in settings to sync.', 'error');
+      openModal(settingsModal);
+      return;
+    }
+
+    isSyncing = true;
+    syncNowBtn.classList.add('syncing');
+    showToast(`Syncing ${offlineQueue.length} offline records to Google Sheet...`, 'info');
+
+    let syncedCount = 0;
+    const remainingQueue = [];
+
+    for (let i = 0; i < offlineQueue.length; i++) {
+      const item = offlineQueue[i];
+      try {
+        await sendDataToGoogleSheets(scriptUrl, item);
+        syncedCount++;
+
+        // Update corresponding item in history table
+        const found = submissions.find(s => s.id === item.id);
+        if (found) {
+          found.status = 'synced';
+        }
+      } catch (err) {
+        console.warn('Sync failed for item:', item, err);
+        remainingQueue.push(item);
+      }
+    }
+
+    offlineQueue = remainingQueue;
+    localStorage.setItem(STORAGE_QUEUE_KEY, JSON.stringify(offlineQueue));
+    saveHistory();
+    renderHistoryTable();
+    updateSyncBadges();
+
+    isSyncing = false;
+    syncNowBtn.classList.remove('syncing');
+
+    if (syncedCount > 0) {
+      if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
+      showToast(`Successfully synced ${syncedCount} records to Google Sheet!`, 'success');
+    }
+  }
+
   // ================= MOBILE TAB NAVIGATION =================
   function initMobileTabs() {
-    // Show form by default
     switchTab('entry');
-
     tabEntryBtn.addEventListener('click', () => switchTab('entry'));
     tabHistoryBtn.addEventListener('click', () => switchTab('history'));
   }
@@ -157,7 +283,7 @@ function doGet(e) {
     }
   }
 
-  // ================= 1-TAP GPS ACQUISITION =================
+  // ================= SATELLITE GPS ACQUISITION (WORKS 100% OFFLINE) =================
   captureGpsBtn.addEventListener('click', () => {
     if (!navigator.geolocation) {
       showToast('GPS is not supported by your browser.', 'error');
@@ -166,9 +292,9 @@ function doGet(e) {
 
     captureGpsBtn.classList.add('acquiring');
     captureGpsBtn.classList.remove('captured');
-    gpsBtnTitle.textContent = 'Acquiring GPS Location...';
-    gpsBtnSubtitle.textContent = 'Please wait while device locks satellites';
-    showToast('Acquiring high-accuracy GPS coordinates...', 'info');
+    gpsBtnTitle.textContent = 'Acquiring Satellite GPS...';
+    gpsBtnSubtitle.textContent = 'Works offline without internet connection';
+    showToast('Locking onto satellite GPS coordinates...', 'info');
 
     const geoOptions = {
       enableHighAccuracy: true,
@@ -188,8 +314,7 @@ function doGet(e) {
 
         coordinatesInput.value = coordString;
 
-        // Visual feedback
-        gpsBtnTitle.textContent = `✓ Location Locked: ${lat}, ${lng}`;
+        gpsBtnTitle.textContent = `✓ GPS Locked: ${lat}, ${lng}`;
         gpsBtnSubtitle.textContent = `Accuracy: ±${accuracy}m • Tap to refresh`;
         accuracyVal.textContent = `±${accuracy}m`;
         gpsAccuracyPill.style.display = 'inline-flex';
@@ -197,23 +322,19 @@ function doGet(e) {
         updateMapPreview(coordString);
         validateField(coordinatesInput, 'group-coordinates', isValidCoordinates);
 
-        // Haptic feedback for mobile
-        if (navigator.vibrate) {
-          navigator.vibrate([40]);
-        }
-
-        showToast(`GPS Captured (±${accuracy}m accuracy)`, 'success');
+        if (navigator.vibrate) navigator.vibrate([40]);
+        showToast(`GPS captured: ${coordString} (±${accuracy}m accuracy)`, 'success');
       },
       (error) => {
         captureGpsBtn.classList.remove('acquiring');
         gpsBtnTitle.textContent = 'Tap to Retry GPS Capture';
-        gpsBtnSubtitle.textContent = 'Could not get location. Ensure GPS is on';
+        gpsBtnSubtitle.textContent = 'Could not get location. Ensure GPS is ON';
 
         let msg = 'Failed to get GPS location.';
         if (error.code === error.PERMISSION_DENIED) {
-          msg = 'Location permission denied. Please allow location in browser settings.';
+          msg = 'GPS permission denied. Please allow location in browser settings.';
         } else if (error.code === error.POSITION_UNAVAILABLE) {
-          msg = 'GPS signal unavailable. Ensure location/GPS is turned on.';
+          msg = 'GPS signal unavailable. Ensure device location is turned on.';
         } else if (error.code === error.TIMEOUT) {
           msg = 'GPS request timed out. Please tap retry.';
         }
@@ -223,7 +344,6 @@ function doGet(e) {
     );
   });
 
-  // Manual Coordinates listener
   coordinatesInput.addEventListener('input', () => {
     const val = coordinatesInput.value.trim();
     validateField(coordinatesInput, 'group-coordinates', isValidCoordinates);
@@ -246,7 +366,6 @@ function doGet(e) {
     }
   }
 
-  // Real-time Input Validation
   centerCodeInput.addEventListener('input', () => {
     validateField(centerCodeInput, 'group-center-code', val => val.trim().length >= 1);
   });
@@ -255,15 +374,9 @@ function doGet(e) {
     validateField(regNoInput, 'group-reg-no', val => val.trim().length >= 1);
   });
 
-  // ================= FORM SUBMISSION =================
+  // ================= FORM SUBMISSION (ONLINE & OFFLINE) =================
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-
-    if (!scriptUrl) {
-      showToast('Connect your Google Sheet URL first!', 'error');
-      openModal(settingsModal);
-      return;
-    }
 
     const isCenterValid = validateField(centerCodeInput, 'group-center-code', val => val.trim().length >= 1);
     const isRegValid = validateField(regNoInput, 'group-reg-no', val => val.trim().length >= 1);
@@ -275,65 +388,71 @@ function doGet(e) {
     }
 
     const payload = {
+      id: Date.now(),
       center_code: centerCodeInput.value.trim(),
       reg_no: regNoInput.value.trim(),
       coordinates: coordinatesInput.value.trim(),
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      status: 'pending' // Default until confirmed
     };
 
     setLoading(true);
 
-    try {
-      await sendDataToGoogleSheets(scriptUrl, payload);
+    const isOnline = navigator.onLine;
 
-      payload.status = 'Synchronized';
-      payload.id = Date.now();
-      submissions.unshift(payload);
-      saveHistory();
-      renderHistoryTable();
-
-      // Mobile haptic feedback on successful save
-      if (navigator.vibrate) {
-        navigator.vibrate([30, 50, 30]);
+    if (isOnline && scriptUrl) {
+      // Try sending directly
+      try {
+        await sendDataToGoogleSheets(scriptUrl, payload);
+        payload.status = 'synced';
+        showToast(`Saved & synced "${payload.reg_no}" to Google Sheet!`, 'success');
+      } catch (err) {
+        console.warn('Direct upload failed, saving to offline queue:', err);
+        payload.status = 'pending';
+        offlineQueue.push(payload);
+        localStorage.setItem(STORAGE_QUEUE_KEY, JSON.stringify(offlineQueue));
+        showToast(`Saved to Offline Queue (will sync when signal improves).`, 'info');
       }
-
-      showToast(`Saved! Logged "${payload.reg_no}" to Google Sheet.`, 'success');
-
-      // Clear fields for next entry
-      centerCodeInput.value = '';
-      regNoInput.value = '';
-      coordinatesInput.value = '';
-      captureGpsBtn.classList.remove('captured');
-      gpsBtnTitle.textContent = 'Tap to Capture Current Location';
-      gpsBtnSubtitle.textContent = 'Uses your phone/device GPS';
-      gpsAccuracyPill.style.display = 'none';
-      previewMapLink.style.display = 'none';
-      centerCodeInput.focus();
-
-      document.querySelectorAll('.form-group').forEach(grp => grp.classList.remove('has-error'));
-
-    } catch (err) {
-      console.error('Submission error:', err);
-      showToast('Entry submitted. Check Google Sheet for the new row.', 'info');
-
-      payload.status = 'Synchronized';
-      payload.id = Date.now();
-      submissions.unshift(payload);
-      saveHistory();
-      renderHistoryTable();
-    } finally {
-      setLoading(false);
+    } else {
+      // Offline mode
+      payload.status = 'pending';
+      offlineQueue.push(payload);
+      localStorage.setItem(STORAGE_QUEUE_KEY, JSON.stringify(offlineQueue));
+      showToast(`Saved Offline! "${payload.reg_no}" will sync when you get internet.`, 'info');
     }
+
+    // Save to local session log
+    submissions.unshift(payload);
+    saveHistory();
+    renderHistoryTable();
+    updateSyncBadges();
+
+    if (navigator.vibrate) {
+      navigator.vibrate([30, 50, 30]);
+    }
+
+    // Clear form for next entry
+    centerCodeInput.value = '';
+    regNoInput.value = '';
+    coordinatesInput.value = '';
+    captureGpsBtn.classList.remove('captured');
+    gpsBtnTitle.textContent = 'Tap to Capture Current Location';
+    gpsBtnSubtitle.textContent = 'Works offline via satellite GPS';
+    gpsAccuracyPill.style.display = 'none';
+    previewMapLink.style.display = 'none';
+    centerCodeInput.focus();
+    document.querySelectorAll('.form-group').forEach(grp => grp.classList.remove('has-error'));
+
+    setLoading(false);
   });
 
-  // Reset Button
   resetBtn.addEventListener('click', () => {
     centerCodeInput.value = '';
     regNoInput.value = '';
     coordinatesInput.value = '';
     captureGpsBtn.classList.remove('captured');
     gpsBtnTitle.textContent = 'Tap to Capture Current Location';
-    gpsBtnSubtitle.textContent = 'Uses your phone/device GPS';
+    gpsBtnSubtitle.textContent = 'Works offline via satellite GPS';
     gpsAccuracyPill.style.display = 'none';
     previewMapLink.style.display = 'none';
     document.querySelectorAll('.form-group').forEach(grp => grp.classList.remove('has-error'));
@@ -341,7 +460,6 @@ function doGet(e) {
     showToast('Form cleared.', 'info');
   });
 
-  // Google Sheets Send Function
   async function sendDataToGoogleSheets(url, data) {
     const jsonString = JSON.stringify(data);
 
@@ -392,20 +510,6 @@ function doGet(e) {
     }
   }
 
-  function updateConnectionBadge() {
-    if (scriptUrl && scriptUrl.includes('script.google.com')) {
-      connectionStatus.className = 'status-pill connected';
-      connectionStatus.querySelector('.status-label').textContent = 'Sheet Linked';
-      sheetTargetDisplay.innerHTML = `<span class="dot"></span> Connected`;
-      setupPromptBanner.style.display = 'none';
-    } else {
-      connectionStatus.className = 'status-pill disconnected';
-      connectionStatus.querySelector('.status-label').textContent = 'Setup Sheet';
-      sheetTargetDisplay.innerHTML = `<span class="dot" style="background: #f59e0b"></span> Not Linked`;
-      setupPromptBanner.style.display = 'flex';
-    }
-  }
-
   function renderHistoryTable() {
     recordCountBadge.textContent = submissions.length;
     tabRecordCount.textContent = submissions.length;
@@ -416,8 +520,8 @@ function doGet(e) {
           <td colspan="6">
             <div class="empty-state">
               <div class="empty-icon">📍</div>
-              <h4>No field records submitted yet</h4>
-              <p>Capture your first coordinates and submit.</p>
+              <h4>No field records recorded yet</h4>
+              <p>Capture GPS coordinates and submit even if offline.</p>
             </div>
           </td>
         </tr>
@@ -426,7 +530,11 @@ function doGet(e) {
     }
 
     tableBody.innerHTML = submissions.map((item, index) => {
-      const mapUrl = `https://www.google.com/maps?q=${encodeURIComponent((item.coordinates || '').replace(/\s+/g, ''))}`;
+      const isSynced = item.status === 'synced';
+      const statusBadge = isSynced
+        ? `<span class="badge-status synced">✓ In Sheet</span>`
+        : `<span class="badge-status pending">⏳ Offline (Pending)</span>`;
+
       return `
         <tr>
           <td style="color: var(--text-dim); font-size: 0.78rem;">#${submissions.length - index}</td>
@@ -435,16 +543,7 @@ function doGet(e) {
           <td style="font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: #a7f3d0;">
             ${escapeHtml(item.coordinates)}
           </td>
-          <td>
-            <a href="${mapUrl}" target="_blank" rel="noopener noreferrer" class="map-table-btn" title="View on Google Maps">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                <polyline points="15 3 21 3 21 9"></polyline>
-                <line x1="10" y1="14" x2="21" y2="3"></line>
-              </svg>
-              Map
-            </a>
-          </td>
+          <td>${statusBadge}</td>
           <td style="color: var(--text-muted); font-size: 0.76rem;">${item.timestamp || 'Just now'}</td>
         </tr>
       `;
@@ -470,11 +569,12 @@ function doGet(e) {
       showToast('No records available to export.', 'info');
       return;
     }
-    const headers = ['Center_Code', 'Reg_No', 'Coordinates', 'Timestamp'];
+    const headers = ['Center_Code', 'Reg_No', 'Coordinates', 'Status', 'Timestamp'];
     const rows = submissions.map(s => [
       `"${(s.center_code || '').replace(/"/g, '""')}"`,
       `"${(s.reg_no || '').replace(/"/g, '""')}"`,
       `"${(s.coordinates || '').replace(/"/g, '""')}"`,
+      `"${s.status || 'synced'}"`,
       `"${s.timestamp || ''}"`
     ]);
 
@@ -496,12 +596,6 @@ function doGet(e) {
     openModal(settingsModal);
   });
 
-  connectionStatus.addEventListener('click', () => {
-    scriptUrlInput.value = scriptUrl;
-    testStatusMsg.textContent = '';
-    openModal(settingsModal);
-  });
-
   closeSettingsModal.addEventListener('click', () => closeModal(settingsModal));
   cancelSettingsBtn.addEventListener('click', () => closeModal(settingsModal));
 
@@ -513,12 +607,16 @@ function doGet(e) {
     }
     scriptUrl = val;
     localStorage.setItem(STORAGE_URL_KEY, scriptUrl);
-    updateConnectionBadge();
+    setupPromptBanner.style.display = 'none';
     closeModal(settingsModal);
     showToast('Google Sheet connection saved!', 'success');
+
+    // Trigger auto-sync if pending items exist
+    if (offlineQueue.length > 0 && navigator.onLine) {
+      autoSyncQueue();
+    }
   });
 
-  // Test Connection
   testConnectionBtn.addEventListener('click', async () => {
     const testUrl = scriptUrlInput.value.trim();
     if (!testUrl) {
@@ -551,12 +649,8 @@ function doGet(e) {
   // Guide Modal Handlers
   openGuideBtn.addEventListener('click', () => openModal(guideModal));
   closeGuideModal.addEventListener('click', () => closeModal(guideModal));
-  gotItGuideBtn.addEventListener('click', () => {
-    closeModal(guideModal);
-    openModal(settingsModal);
-  });
+  gotItGuideBtn.addEventListener('click', () => closeModal(guideModal));
 
-  // Copy Code Button
   copyCodeBtn.addEventListener('click', () => {
     navigator.clipboard.writeText(APPS_SCRIPT_CODE).then(() => {
       const original = copyCodeBtn.innerHTML;
@@ -582,7 +676,6 @@ function doGet(e) {
     });
   });
 
-  // Toast Notification System
   function showToast(message, type = 'info') {
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;

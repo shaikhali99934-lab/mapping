@@ -4,9 +4,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>GeoSync | Mobile Field Data Entry & GPS</title>
+  <title>GeoSync | Offline Mobile Field Data Entry</title>
   <meta name="description"
-    content="Simple, mobile-friendly field data collection form with instant 1-tap GPS coordinates connected directly to Google Sheets.">
+    content="Offline-first field data collection form with 1-tap GPS coordinates. Saves entries locally without internet and auto-syncs to Google Sheets when back online.">
+  <link rel="manifest" href="manifest.json">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
@@ -14,6 +15,8 @@
     rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <meta name="theme-color" content="#0a0e17">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 </head>
 
 <body class="dark-theme">
@@ -22,7 +25,7 @@
   <div class="bg-glow bg-glow-2"></div>
 
   <div class="app-container">
-    <!-- Top Bar: Header -->
+    <!-- Top Header -->
     <header class="app-header">
       <div class="brand">
         <div class="brand-icon">
@@ -34,21 +37,32 @@
         </div>
         <div class="brand-text">
           <h1>GeoSync</h1>
-          <p class="subtitle">Field Data & GPS</p>
+          <p class="subtitle">Offline Field Portal</p>
         </div>
       </div>
 
       <div class="header-actions">
-        <!-- Quick Status Pill -->
-        <button id="connectionStatus" class="status-pill disconnected" type="button" aria-label="Configure Google Sheet URL">
-          <span class="status-dot"></span>
-          <span class="status-label">Setup Sheet</span>
+        <!-- Live Network Pill -->
+        <div id="networkStatusPill" class="network-pill online" title="Current Internet Connection Status">
+          <span class="net-dot"></span>
+          <span class="net-text" id="networkStatusText">Online</span>
+        </div>
+
+        <!-- Sync Queue Button (Visible when offline rows exist) -->
+        <button id="syncNowBtn" class="btn-sync-header" type="button" style="display: none;" title="Tap to sync pending rows to Google Sheets">
+          <span class="sync-icon">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <polyline points="1 20 1 14 7 14"></polyline>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+          </span>
+          <span class="sync-text">Sync (<span id="pendingCountHeader">0</span>)</span>
         </button>
 
         <!-- Help Guide Button -->
         <button id="openGuideBtn" class="btn-icon" aria-label="Help & Instructions" title="Setup Instructions">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-            stroke-linecap="round" stroke-linejoin="round">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
             <circle cx="12" cy="12" r="10"></circle>
             <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
             <line x1="12" y1="17" x2="12.01" y2="17"></line>
@@ -57,8 +71,7 @@
 
         <!-- Settings Button -->
         <button id="openSettingsBtn" class="btn-icon" aria-label="Settings" title="Sheet URL Settings">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-            stroke-linecap="round" stroke-linejoin="round">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
             <circle cx="12" cy="12" r="3"></circle>
             <path
               d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
@@ -68,12 +81,21 @@
       </div>
     </header>
 
-    <!-- First-Time Setup Alert Banner (hidden once URL is configured) -->
+    <!-- Offline Alert Banner (Shows when offline) -->
+    <div id="offlineNoticeBanner" class="offline-banner" style="display: none;">
+      <div class="banner-icon">📡</div>
+      <div class="banner-body">
+        <strong>Offline Mode Active</strong>
+        <p>No internet connection. Submissions are saved safely on your device and will sync automatically when you reconnect. <em>(Satellite GPS works 100% offline!)</em></p>
+      </div>
+    </div>
+
+    <!-- First-Time Setup Prompt Banner (Hidden once URL is configured) -->
     <div id="setupPromptBanner" class="setup-banner" style="display: none;">
       <div class="banner-icon">💡</div>
       <div class="banner-body">
         <strong>First Time Here?</strong>
-        <p>Connect your Google Sheet Web App URL once so your entries save automatically.</p>
+        <p>Connect your Google Sheet Web App URL once so your entries can reach your spreadsheet.</p>
       </div>
       <button type="button" id="bannerSetupBtn" class="btn-banner-action">Connect Sheet</button>
     </div>
@@ -100,14 +122,14 @@
       </button>
     </nav>
 
-    <!-- Main Grid Content -->
+    <!-- Main Content -->
     <main class="main-content">
       <!-- Section 1: Data Entry Form -->
       <section class="form-section" id="viewFormSection">
         <div class="card glass-card form-card">
           <div class="card-header">
             <div>
-              <span class="badge">Google Sheet Entry</span>
+              <span class="badge">Offline-Ready Entry</span>
               <h2 class="card-title">Field Record Form</h2>
               <p class="card-desc">Columns: <code>Center_Code</code> | <code>Reg No</code> | <code>Coordinates</code></p>
             </div>
@@ -184,7 +206,7 @@
                 </div>
                 <div class="gps-btn-text-content">
                   <strong id="gpsBtnTitle">Tap to Capture Current Location</strong>
-                  <span id="gpsBtnSubtitle">Uses your phone/device GPS</span>
+                  <span id="gpsBtnSubtitle">Works offline via satellite GPS</span>
                 </div>
               </button>
 
@@ -212,14 +234,14 @@
               </div>
             </div>
 
-            <!-- Form Actions (Thumb-friendly & Big on mobile) -->
+            <!-- Form Actions -->
             <div class="form-actions">
               <button type="submit" id="submitBtn" class="btn-primary btn-submit-mobile">
                 <span class="btn-text">
                   <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
                     <polyline points="20 6 9 17 4 12"></polyline>
                   </svg>
-                  Submit to Google Sheet
+                  <span id="submitBtnText">Save & Submit Row</span>
                 </span>
                 <span class="spinner" aria-hidden="true"></span>
               </button>
@@ -242,12 +264,19 @@
           <div class="card-header">
             <div>
               <div class="flex-center gap-2">
-                <h2 class="card-title">Recent Submissions</h2>
+                <h2 class="card-title">Field Records Log</h2>
                 <span class="count-badge" id="recordCount">0</span>
               </div>
-              <p class="card-desc">Saved rows synced into Google Sheet</p>
+              <p class="card-desc">Saved on device & synced with Google Sheets</p>
             </div>
             <div class="actions-group">
+              <button id="syncTableBtn" class="btn-ghost text-accent" title="Sync all pending offline entries" style="display: none;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <path d="M23 4v6h-6"></path>
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                </svg>
+                Sync Now
+              </button>
               <button id="exportCsvBtn" class="btn-ghost" title="Export this session to CSV">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -265,7 +294,7 @@
             </div>
           </div>
 
-          <!-- Responsive Table & Cards on Mobile -->
+          <!-- Responsive Table -->
           <div class="table-responsive">
             <table class="data-table" id="submissionsTable">
               <thead>
@@ -274,7 +303,7 @@
                   <th>Center_Code</th>
                   <th>Reg No</th>
                   <th>Coordinates</th>
-                  <th>Map</th>
+                  <th>Status</th>
                   <th>Time</th>
                 </tr>
               </thead>
@@ -283,8 +312,8 @@
                   <td colspan="6">
                     <div class="empty-state">
                       <div class="empty-icon">📍</div>
-                      <h4>No field records submitted yet</h4>
-                      <p>Capture your first coordinates and submit on the left.</p>
+                      <h4>No field records recorded yet</h4>
+                      <p>Capture GPS coordinates and submit even if offline.</p>
                     </div>
                   </td>
                 </tr>
@@ -296,7 +325,7 @@
     </main>
   </div>
 
-  <!-- Settings Modal (Mobile Sheet) -->
+  <!-- Settings Modal -->
   <div id="settingsModal" class="modal-backdrop">
     <div class="modal-card glass-card">
       <div class="modal-header">
@@ -314,7 +343,7 @@
 
       <div class="modal-body">
         <p class="modal-text">
-          Paste your <strong>Google Apps Script Web App URL</strong> below. Your entries will be submitted directly to your sheet.
+          Paste your <strong>Google Apps Script Web App URL</strong> below. Offline entries will be queued and sent to this endpoint when internet is available.
         </p>
 
         <div class="form-group">
@@ -351,7 +380,7 @@
               <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
             </svg>
           </div>
-          <h3>Simple 2-Minute Google Sheet Setup</h3>
+          <h3>How Offline Sync Works</h3>
         </div>
         <button class="modal-close" id="closeGuideModal" aria-label="Close modal">&times;</button>
       </div>
@@ -361,24 +390,32 @@
           <div class="guide-step">
             <div class="step-num">1</div>
             <div class="step-content">
-              <h4>Setup Headers in Google Sheet</h4>
-              <p>In Row 1 of your Google Sheet, put these column headers: <code>Center_Code</code>, <code>Reg No</code>, <code>Coordinates</code>.</p>
+              <h4>Works 100% Without Internet</h4>
+              <p>When you are in remote field areas without signal, simply keep entering data. Rows are stored in your phone's safe offline storage.</p>
             </div>
           </div>
 
           <div class="guide-step">
             <div class="step-num">2</div>
             <div class="step-content">
-              <h4>Open Apps Script</h4>
-              <p>In your Google Sheet, click <strong>Extensions</strong> &rarr; <strong>Apps Script</strong>.</p>
+              <h4>Satellite GPS Always Works</h4>
+              <p>Phone GPS uses direct satellite radio signals, not mobile data. You can capture exact coordinates anywhere on Earth.</p>
             </div>
           </div>
 
           <div class="guide-step">
             <div class="step-num">3</div>
             <div class="step-content">
-              <h4>Paste the Code</h4>
-              <p>Delete everything in the editor and paste this code:</p>
+              <h4>Automatic Sync on Reconnecting</h4>
+              <p>As soon as your phone gets 3G/4G or Wi-Fi, GeoSync automatically uploads all pending rows to your Google Sheet without you lifting a finger!</p>
+            </div>
+          </div>
+
+          <div class="guide-step">
+            <div class="step-num">4</div>
+            <div class="step-content">
+              <h4>Google Sheet Apps Script Code</h4>
+              <p>Ensure this code is deployed in your Google Sheet's <strong>Extensions &rarr; Apps Script</strong>:</p>
               <div class="code-block-wrapper">
                 <button class="btn-copy-code" id="copyCodeBtn">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -391,32 +428,11 @@
               </div>
             </div>
           </div>
-
-          <div class="guide-step">
-            <div class="step-num">4</div>
-            <div class="step-content">
-              <h4>Deploy as Web App</h4>
-              <ul>
-                <li>Click <strong>Deploy</strong> (top right) &rarr; <strong>New deployment</strong> (or Manage deployments &rarr; Edit).</li>
-                <li>Set <strong>Execute as</strong>: <em>Me</em>.</li>
-                <li>Set <strong>Who has access</strong>: <em>Anyone</em>.</li>
-                <li>Click <strong>Deploy</strong>. If Google shows "unverified", click <em>Advanced</em> &rarr; <em>Go to project (unsafe)</em> &rarr; <em>Allow</em>.</li>
-              </ul>
-            </div>
-          </div>
-
-          <div class="guide-step">
-            <div class="step-num">5</div>
-            <div class="step-content">
-              <h4>Paste URL</h4>
-              <p>Copy the <strong>Web App URL</strong> and paste it into Settings in this form!</p>
-            </div>
-          </div>
         </div>
       </div>
 
       <div class="modal-footer">
-        <button type="button" class="btn-primary" id="gotItGuideBtn">Got It &rarr; Configure URL</button>
+        <button type="button" class="btn-primary" id="gotItGuideBtn">Got It &rarr; Back to Form</button>
       </div>
     </div>
   </div>
