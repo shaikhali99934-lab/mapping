@@ -1,4 +1,4 @@
-// GeoSync Google Sheets Field Data Integration Logic
+// GeoSync Mobile Field Data Integration Logic
 document.addEventListener('DOMContentLoaded', () => {
   // Elements
   const form = document.getElementById('dataEntryForm');
@@ -6,6 +6,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const regNoInput = document.getElementById('fieldRegNo');
   const coordinatesInput = document.getElementById('fieldCoordinates');
   const captureGpsBtn = document.getElementById('captureGpsBtn');
+  const gpsBtnTitle = document.getElementById('gpsBtnTitle');
+  const gpsBtnSubtitle = document.getElementById('gpsBtnSubtitle');
   const gpsAccuracyPill = document.getElementById('gpsAccuracyPill');
   const accuracyVal = document.getElementById('accuracyVal');
   const previewMapLink = document.getElementById('previewMapLink');
@@ -16,10 +18,19 @@ document.addEventListener('DOMContentLoaded', () => {
   // Status & Headers
   const connectionStatus = document.getElementById('connectionStatus');
   const sheetTargetDisplay = document.getElementById('sheetTargetDisplay');
+  const setupPromptBanner = document.getElementById('setupPromptBanner');
+  const bannerSetupBtn = document.getElementById('bannerSetupBtn');
   const recordCountBadge = document.getElementById('recordCount');
+  const tabRecordCount = document.getElementById('tabRecordCount');
   const tableBody = document.getElementById('tableBody');
   const exportCsvBtn = document.getElementById('exportCsvBtn');
   const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+
+  // Mobile Tabs
+  const tabEntryBtn = document.getElementById('tabEntryBtn');
+  const tabHistoryBtn = document.getElementById('tabHistoryBtn');
+  const viewFormSection = document.getElementById('viewFormSection');
+  const viewHistorySection = document.getElementById('viewHistorySection');
 
   // Modals & Triggers
   const openSettingsBtn = document.getElementById('openSettingsBtn');
@@ -39,7 +50,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const codeSnippetContent = document.getElementById('codeSnippetContent');
   const toastContainer = document.getElementById('toastContainer');
 
-  // Google Apps Script source code snippet shown in guide
+  // Google Apps Script snippet shown in guide
   const APPS_SCRIPT_CODE = `function doPost(e) {
   var lock = LockService.getScriptLock();
   lock.tryLock(10000);
@@ -64,7 +75,7 @@ document.addEventListener('DOMContentLoaded', () => {
     var coordinates = data.coordinates || data.Coordinates || '';
     var timestamp = new Date().toLocaleString();
 
-    // Appends row matching your headers: Center_Code | Reg No | Coordinates | Timestamp
+    // Appends matching your headers: Center_Code | Reg No | Coordinates | Timestamp
     sheet.appendRow([centerCode, regNo, coordinates, timestamp]);
 
     return ContentService
@@ -105,18 +116,58 @@ function doGet(e) {
     submissions = [];
   }
 
-  // Initial UI Setup
+  // Initial Setup
   updateConnectionBadge();
   renderHistoryTable();
+  initMobileTabs();
 
-  // ================= GPS CAPTURE HANDLER =================
+  // Show setup banner if URL is missing (helps new users!)
+  if (!scriptUrl) {
+    setupPromptBanner.style.display = 'flex';
+  } else {
+    setupPromptBanner.style.display = 'none';
+  }
+
+  bannerSetupBtn.addEventListener('click', () => {
+    scriptUrlInput.value = scriptUrl;
+    testStatusMsg.textContent = '';
+    openModal(settingsModal);
+  });
+
+  // ================= MOBILE TAB NAVIGATION =================
+  function initMobileTabs() {
+    // Show form by default
+    switchTab('entry');
+
+    tabEntryBtn.addEventListener('click', () => switchTab('entry'));
+    tabHistoryBtn.addEventListener('click', () => switchTab('history'));
+  }
+
+  function switchTab(tab) {
+    if (tab === 'entry') {
+      tabEntryBtn.classList.add('active');
+      tabHistoryBtn.classList.remove('active');
+      viewFormSection.classList.remove('mobile-hidden');
+      viewHistorySection.classList.add('mobile-hidden');
+    } else {
+      tabHistoryBtn.classList.add('active');
+      tabEntryBtn.classList.remove('active');
+      viewHistorySection.classList.remove('mobile-hidden');
+      viewFormSection.classList.add('mobile-hidden');
+    }
+  }
+
+  // ================= 1-TAP GPS ACQUISITION =================
   captureGpsBtn.addEventListener('click', () => {
     if (!navigator.geolocation) {
-      showToast('Geolocation is not supported by your browser.', 'error');
+      showToast('GPS is not supported by your browser.', 'error');
       return;
     }
 
     captureGpsBtn.classList.add('acquiring');
+    captureGpsBtn.classList.remove('captured');
+    gpsBtnTitle.textContent = 'Acquiring GPS Location...';
+    gpsBtnSubtitle.textContent = 'Please wait while device locks satellites';
     showToast('Acquiring high-accuracy GPS coordinates...', 'info');
 
     const geoOptions = {
@@ -128,33 +179,43 @@ function doGet(e) {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         captureGpsBtn.classList.remove('acquiring');
+        captureGpsBtn.classList.add('captured');
+
         const lat = position.coords.latitude.toFixed(6);
         const lng = position.coords.longitude.toFixed(6);
         const accuracy = Math.round(position.coords.accuracy);
-
         const coordString = `${lat}, ${lng}`;
+
         coordinatesInput.value = coordString;
 
-        // Display accuracy badge
+        // Visual feedback
+        gpsBtnTitle.textContent = `✓ Location Locked: ${lat}, ${lng}`;
+        gpsBtnSubtitle.textContent = `Accuracy: ±${accuracy}m • Tap to refresh`;
         accuracyVal.textContent = `±${accuracy}m`;
         gpsAccuracyPill.style.display = 'inline-flex';
 
-        // Update Map preview link
         updateMapPreview(coordString);
-
         validateField(coordinatesInput, 'group-coordinates', isValidCoordinates);
-        showToast(`GPS captured: ${coordString} (±${accuracy}m accuracy)`, 'success');
+
+        // Haptic feedback for mobile
+        if (navigator.vibrate) {
+          navigator.vibrate([40]);
+        }
+
+        showToast(`GPS Captured (±${accuracy}m accuracy)`, 'success');
       },
       (error) => {
         captureGpsBtn.classList.remove('acquiring');
-        console.warn('Geolocation error:', error);
+        gpsBtnTitle.textContent = 'Tap to Retry GPS Capture';
+        gpsBtnSubtitle.textContent = 'Could not get location. Ensure GPS is on';
+
         let msg = 'Failed to get GPS location.';
         if (error.code === error.PERMISSION_DENIED) {
-          msg = 'Location permission denied. Please allow location access in your browser.';
+          msg = 'Location permission denied. Please allow location in browser settings.';
         } else if (error.code === error.POSITION_UNAVAILABLE) {
-          msg = 'Location information is unavailable. Ensure device GPS is turned on.';
+          msg = 'GPS signal unavailable. Ensure location/GPS is turned on.';
         } else if (error.code === error.TIMEOUT) {
-          msg = 'GPS request timed out. Please try again or type coordinates manually.';
+          msg = 'GPS request timed out. Please tap retry.';
         }
         showToast(msg, 'error');
       },
@@ -162,7 +223,7 @@ function doGet(e) {
     );
   });
 
-  // Manual Coordinates Input listener
+  // Manual Coordinates listener
   coordinatesInput.addEventListener('input', () => {
     const val = coordinatesInput.value.trim();
     validateField(coordinatesInput, 'group-coordinates', isValidCoordinates);
@@ -171,7 +232,6 @@ function doGet(e) {
 
   function isValidCoordinates(val) {
     if (!val || val.trim().length === 0) return false;
-    // Checks format: "lat, lng" or decimal numbers separated by comma/space
     const regex = /^-?\d+(\.\d+)?[\s,]+-?\d+(\.\d+)?$/;
     return regex.test(val.trim());
   }
@@ -195,32 +255,22 @@ function doGet(e) {
     validateField(regNoInput, 'group-reg-no', val => val.trim().length >= 1);
   });
 
-  // Keyboard shortcut Ctrl + Enter to submit
-  form.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-      e.preventDefault();
-      form.requestSubmit();
-    }
-  });
-
   // ================= FORM SUBMISSION =================
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    // Check URL first
     if (!scriptUrl) {
-      showToast('Please set your Google Sheet Web App URL in settings first!', 'error');
+      showToast('Connect your Google Sheet URL first!', 'error');
       openModal(settingsModal);
       return;
     }
 
-    // Validate fields
     const isCenterValid = validateField(centerCodeInput, 'group-center-code', val => val.trim().length >= 1);
     const isRegValid = validateField(regNoInput, 'group-reg-no', val => val.trim().length >= 1);
     const isCoordValid = validateField(coordinatesInput, 'group-coordinates', isValidCoordinates);
 
     if (!isCenterValid || !isRegValid || !isCoordValid) {
-      showToast('Please fill out Center Code, Reg No, and Coordinates properly.', 'error');
+      showToast('Please fill out all required fields properly.', 'error');
       return;
     }
 
@@ -228,38 +278,44 @@ function doGet(e) {
       center_code: centerCodeInput.value.trim(),
       reg_no: regNoInput.value.trim(),
       coordinates: coordinatesInput.value.trim(),
-      timestamp: new Date().toLocaleTimeString()
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     };
 
     setLoading(true);
 
     try {
       await sendDataToGoogleSheets(scriptUrl, payload);
-      
-      // Save locally
+
       payload.status = 'Synchronized';
       payload.id = Date.now();
       submissions.unshift(payload);
       saveHistory();
       renderHistoryTable();
 
-      showToast(`Success! Logged "${payload.reg_no}" to Google Sheet.`, 'success');
+      // Mobile haptic feedback on successful save
+      if (navigator.vibrate) {
+        navigator.vibrate([30, 50, 30]);
+      }
 
-      // Reset fields
+      showToast(`Saved! Logged "${payload.reg_no}" to Google Sheet.`, 'success');
+
+      // Clear fields for next entry
       centerCodeInput.value = '';
       regNoInput.value = '';
       coordinatesInput.value = '';
+      captureGpsBtn.classList.remove('captured');
+      gpsBtnTitle.textContent = 'Tap to Capture Current Location';
+      gpsBtnSubtitle.textContent = 'Uses your phone/device GPS';
       gpsAccuracyPill.style.display = 'none';
       previewMapLink.style.display = 'none';
       centerCodeInput.focus();
 
-      // Clear validation borders
       document.querySelectorAll('.form-group').forEach(grp => grp.classList.remove('has-error'));
 
     } catch (err) {
       console.error('Submission error:', err);
-      showToast(`Entry completed. Check Google Sheet for new row.`, 'info');
-      
+      showToast('Entry submitted. Check Google Sheet for the new row.', 'info');
+
       payload.status = 'Synchronized';
       payload.id = Date.now();
       submissions.unshift(payload);
@@ -275,14 +331,17 @@ function doGet(e) {
     centerCodeInput.value = '';
     regNoInput.value = '';
     coordinatesInput.value = '';
+    captureGpsBtn.classList.remove('captured');
+    gpsBtnTitle.textContent = 'Tap to Capture Current Location';
+    gpsBtnSubtitle.textContent = 'Uses your phone/device GPS';
     gpsAccuracyPill.style.display = 'none';
     previewMapLink.style.display = 'none';
     document.querySelectorAll('.form-group').forEach(grp => grp.classList.remove('has-error'));
     centerCodeInput.focus();
-    showToast('Form inputs cleared.', 'info');
+    showToast('Form cleared.', 'info');
   });
 
-  // Google Sheets Send Function (handles Google Apps Script redirects)
+  // Google Sheets Send Function
   async function sendDataToGoogleSheets(url, data) {
     const jsonString = JSON.stringify(data);
 
@@ -311,7 +370,6 @@ function doGet(e) {
     }
   }
 
-  // Validation Helper
   function validateField(inputEl, groupId, validationFn) {
     const group = document.getElementById(groupId);
     if (!group) return true;
@@ -324,7 +382,6 @@ function doGet(e) {
     return isValid;
   }
 
-  // Loading indicator
   function setLoading(isLoading) {
     if (isLoading) {
       submitBtn.classList.add('btn-loading');
@@ -335,22 +392,23 @@ function doGet(e) {
     }
   }
 
-  // Update Status Pill
   function updateConnectionBadge() {
     if (scriptUrl && scriptUrl.includes('script.google.com')) {
       connectionStatus.className = 'status-pill connected';
-      connectionStatus.querySelector('.status-label').textContent = 'Google Sheet Connected';
+      connectionStatus.querySelector('.status-label').textContent = 'Sheet Linked';
       sheetTargetDisplay.innerHTML = `<span class="dot"></span> Connected`;
+      setupPromptBanner.style.display = 'none';
     } else {
       connectionStatus.className = 'status-pill disconnected';
-      connectionStatus.querySelector('.status-label').textContent = 'Link Google Sheet';
+      connectionStatus.querySelector('.status-label').textContent = 'Setup Sheet';
       sheetTargetDisplay.innerHTML = `<span class="dot" style="background: #f59e0b"></span> Not Linked`;
+      setupPromptBanner.style.display = 'flex';
     }
   }
 
-  // Render Submissions Table
   function renderHistoryTable() {
     recordCountBadge.textContent = submissions.length;
+    tabRecordCount.textContent = submissions.length;
 
     if (submissions.length === 0) {
       tableBody.innerHTML = `
@@ -359,7 +417,7 @@ function doGet(e) {
             <div class="empty-state">
               <div class="empty-icon">📍</div>
               <h4>No field records submitted yet</h4>
-              <p>Capture your first coordinates and submit on the left.</p>
+              <p>Capture your first coordinates and submit.</p>
             </div>
           </td>
         </tr>
@@ -371,14 +429,14 @@ function doGet(e) {
       const mapUrl = `https://www.google.com/maps?q=${encodeURIComponent((item.coordinates || '').replace(/\s+/g, ''))}`;
       return `
         <tr>
-          <td style="color: var(--text-dim); font-size: 0.8rem;">#${submissions.length - index}</td>
-          <td><span class="badge" style="font-size: 0.72rem; margin: 0;">${escapeHtml(item.center_code)}</span></td>
-          <td style="font-weight: 600;">${escapeHtml(item.reg_no)}</td>
-          <td style="font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: #a7f3d0;">
+          <td style="color: var(--text-dim); font-size: 0.78rem;">#${submissions.length - index}</td>
+          <td><span class="badge" style="font-size: 0.7rem; margin: 0;">${escapeHtml(item.center_code)}</span></td>
+          <td style="font-weight: 700;">${escapeHtml(item.reg_no)}</td>
+          <td style="font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: #a7f3d0;">
             ${escapeHtml(item.coordinates)}
           </td>
           <td>
-            <a href="${mapUrl}" target="_blank" class="map-table-btn" title="View on Google Maps">
+            <a href="${mapUrl}" target="_blank" rel="noopener noreferrer" class="map-table-btn" title="View on Google Maps">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
                 <polyline points="15 3 21 3 21 9"></polyline>
@@ -387,7 +445,7 @@ function doGet(e) {
               Map
             </a>
           </td>
-          <td style="color: var(--text-muted); font-size: 0.78rem;">${item.timestamp || 'Just now'}</td>
+          <td style="color: var(--text-muted); font-size: 0.76rem;">${item.timestamp || 'Just now'}</td>
         </tr>
       `;
     }).join('');
@@ -397,7 +455,6 @@ function doGet(e) {
     localStorage.setItem(STORAGE_HISTORY_KEY, JSON.stringify(submissions.slice(0, 100)));
   }
 
-  // Clear History
   clearHistoryBtn.addEventListener('click', () => {
     if (submissions.length === 0) return;
     if (confirm('Clear local history table? (Your Google Sheet rows will remain safe)')) {
@@ -408,7 +465,6 @@ function doGet(e) {
     }
   });
 
-  // Export CSV
   exportCsvBtn.addEventListener('click', () => {
     if (submissions.length === 0) {
       showToast('No records available to export.', 'info');
@@ -508,7 +564,7 @@ function doGet(e) {
       setTimeout(() => {
         copyCodeBtn.innerHTML = original;
       }, 2000);
-      showToast('Apps Script code copied to clipboard!', 'success');
+      showToast('Code copied to clipboard!', 'success');
     });
   });
 
@@ -530,7 +586,7 @@ function doGet(e) {
   function showToast(message, type = 'info') {
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
-    
+
     let icon = 'ℹ️';
     if (type === 'success') icon = '✅';
     if (type === 'error') icon = '⚠️';
@@ -545,11 +601,11 @@ function doGet(e) {
     setTimeout(() => {
       toast.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
       toast.style.opacity = '0';
-      toast.style.transform = 'translateX(30px)';
+      toast.style.transform = 'translateY(15px)';
       setTimeout(() => {
         if (toast.parentNode) toast.parentNode.removeChild(toast);
       }, 300);
-    }, 4000);
+    }, 3800);
   }
 
   function escapeHtml(str) {
