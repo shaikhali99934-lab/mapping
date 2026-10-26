@@ -4,9 +4,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>GeoSync | Offline Mobile Field Data Entry</title>
+  <title>Field Mapping | Offline Mobile Data Entry</title>
   <meta name="description"
-    content="Offline-first field data collection form with 1-tap GPS coordinates. Saves entries locally without internet and auto-syncs to Google Sheets when back online.">
+    content="Field Mapping offline-first data collection form with 1-tap GPS coordinates. Saves entries locally without internet and auto-syncs to Google Sheets when back online.">
+  <link rel="icon" type="image/png" href="malc logo.png">
+  <link rel="apple-touch-icon" href="malc logo.png">
+  <meta name="apple-mobile-web-app-title" content="Field Mapping">
   <link rel="manifest" href="manifest.json">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,30 +17,32 @@
     href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
     rel="stylesheet">
   <link rel="stylesheet" href="style.css">
-  <meta name="theme-color" content="#0a0e17">
+  <meta name="theme-color" content="#f1f5f9">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <script>
+    (function () {
+      try {
+        if (localStorage.getItem('field_mapping_auth') === 'malcpak_authenticated' ||
+          sessionStorage.getItem('field_mapping_auth') === 'malcpak_authenticated') {
+          document.documentElement.classList.add('is-authenticated');
+        }
+      } catch (e) { }
+    })();
+  </script>
 </head>
 
-<body class="dark-theme">
-  <!-- Subtle Background Atmosphere Glows -->
-  <div class="bg-glow bg-glow-1"></div>
-  <div class="bg-glow bg-glow-2"></div>
+<body class="light-theme">
 
   <div class="app-container">
     <!-- Top Header -->
     <header class="app-header">
       <div class="brand">
-        <div class="brand-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"
-            stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-            <circle cx="12" cy="10" r="3"></circle>
-          </svg>
+        <div class="brand-logo-wrap" title="Marie Adelaide Leprosy Centre">
+          <img src="malc logo.png" alt="MALC Logo" class="brand-malc-logo">
         </div>
         <div class="brand-text">
-          <h1>GeoSync</h1>
-          <p class="subtitle">Offline Field Portal</p>
+          <h1>Field Mapping</h1>
         </div>
       </div>
 
@@ -49,7 +54,8 @@
         </div>
 
         <!-- Sync Queue Button (Visible when offline rows exist) -->
-        <button id="syncNowBtn" class="btn-sync-header" type="button" style="display: none;" title="Tap to sync pending rows to Google Sheets">
+        <button id="syncNowBtn" class="btn-sync-header" type="button" style="display: none;"
+          title="Tap to sync pending rows to Google Sheets">
           <span class="sync-icon">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
               <polyline points="23 4 23 10 17 10"></polyline>
@@ -58,6 +64,16 @@
             </svg>
           </span>
           <span class="sync-text">Sync (<span id="pendingCountHeader">0</span>)</span>
+        </button>
+
+        <!-- Add to Mobile Home Screen Header Button -->
+        <button id="headerInstallBtn" class="btn-icon btn-header-install" aria-label="Add to Mobile Home Screen"
+          title="Create App Icon on Mobile Home Screen">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <rect x="5" y="2" width="14" height="20" rx="3"></rect>
+            <line x1="12" y1="18" x2="12.01" y2="18"></line>
+            <path d="M12 7v5m-2.5-2.5l2.5 2.5 2.5-2.5"></path>
+          </svg>
         </button>
 
         <!-- Help Guide Button -->
@@ -78,6 +94,15 @@
             </path>
           </svg>
         </button>
+
+        <!-- Lock / Sign Out Button -->
+        <button id="lockAppBtn" class="btn-icon btn-header-lock" aria-label="Lock App / Sign Out"
+          title="Lock App / Sign Out">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+        </button>
       </div>
     </header>
 
@@ -86,7 +111,8 @@
       <div class="banner-icon">📡</div>
       <div class="banner-body">
         <strong>Offline Mode Active</strong>
-        <p>No internet connection. Submissions are saved safely on your device and will sync automatically when you reconnect. <em>(Satellite GPS works 100% offline!)</em></p>
+        <p>No internet connection. Submissions are saved safely on your device and will sync automatically when you
+          reconnect. <em>(Satellite GPS works 100% offline!)</em></p>
       </div>
     </div>
 
@@ -98,6 +124,36 @@
         <p>Connect your Google Sheet Web App URL once so your entries can reach your spreadsheet.</p>
       </div>
       <button type="button" id="bannerSetupBtn" class="btn-banner-action">Connect Sheet</button>
+    </div>
+
+    <!-- Mobile Home Screen Quick Install Banner -->
+    <div id="installAppBanner" class="install-banner">
+      <div class="install-banner-left">
+        <div class="install-banner-logo-wrap">
+          <img src="malc logo.png" alt="MALC Logo" class="install-banner-logo">
+        </div>
+        <div class="install-banner-text">
+          <div class="install-pill-row">
+            <span class="install-pill">Mobile Home Screen</span>
+            <span class="install-subtag">Offline Ready</span>
+          </div>
+          <strong class="install-heading">Install Field Mapping on Your Phone</strong>
+          <p class="install-desc">Add 1-tap shortcut icon to your phone's home screen for fast fullscreen field access.
+          </p>
+        </div>
+      </div>
+      <div class="install-banner-actions">
+        <button type="button" id="mainInstallBtn" class="btn-install-action">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
+            <rect x="5" y="2" width="14" height="20" rx="3"></rect>
+            <line x1="12" y1="18" x2="12.01" y2="18"></line>
+            <path d="M12 7v5m-2.5-2.5l2.5 2.5 2.5-2.5"></path>
+          </svg>
+          <span>Add to Home Screen</span>
+        </button>
+        <button type="button" id="dismissInstallBanner" class="btn-dismiss-install" title="Dismiss"
+          aria-label="Dismiss banner">&times;</button>
+      </div>
     </div>
 
     <!-- Mobile Navigation Tab Switcher -->
@@ -130,8 +186,7 @@
           <div class="card-header">
             <div>
               <span class="badge">Offline-Ready Entry</span>
-              <h2 class="card-title">Field Record Form</h2>
-              <p class="card-desc">Columns: <code>Center_Code</code> | <code>Reg No</code> | <code>Coordinates</code></p>
+              <h2 class="card-title">New Entry</h2>
             </div>
             <div class="sheet-target-badge" id="sheetTargetDisplay">
               <span class="dot"></span> Ready
@@ -142,7 +197,7 @@
             <!-- Field 1: Center_Code -->
             <div class="form-group" id="group-center-code">
               <label for="fieldCenterCode" class="form-label">
-                <span>Center Code (Center_Code)</span>
+                <span>Center Code</span>
                 <span class="req-star">*</span>
               </label>
               <div class="input-wrapper">
@@ -161,7 +216,7 @@
             <!-- Field 2: Reg No -->
             <div class="form-group" id="group-reg-no">
               <label for="fieldRegNo" class="form-label">
-                <span>Registration Number (Reg No)</span>
+                <span>Registration Number</span>
                 <span class="req-star">*</span>
               </label>
               <div class="input-wrapper">
@@ -173,8 +228,8 @@
                     <line x1="7" y1="16" x2="10" y2="16"></line>
                   </svg>
                 </div>
-                <input type="text" id="fieldRegNo" name="reg_no" class="form-control"
-                  placeholder="e.g. REG-2024-8841" required inputmode="text" autocomplete="off">
+                <input type="text" id="fieldRegNo" name="reg_no" class="form-control" placeholder="e.g. REG-2024-8841"
+                  required inputmode="text" autocomplete="off">
               </div>
               <span class="error-text">Please enter the Registration Number.</span>
             </div>
@@ -195,7 +250,8 @@
               <!-- Dedicated 1-Tap Big Mobile GPS Button -->
               <button type="button" id="captureGpsBtn" class="big-gps-button">
                 <div class="gps-btn-icon-wrapper">
-                  <svg class="gps-pin-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
+                  <svg class="gps-pin-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="2.3">
                     <circle cx="12" cy="12" r="10"></circle>
                     <line x1="2" y1="12" x2="6" y2="12"></line>
                     <line x1="18" y1="12" x2="22" y2="12"></line>
@@ -223,7 +279,8 @@
 
               <div class="coordinate-meta">
                 <span class="error-text">Valid coordinates required (e.g. 31.5204, 74.3587).</span>
-                <a id="previewMapLink" href="#" target="_blank" rel="noopener noreferrer" class="map-link-btn" style="display: none;">
+                <a id="previewMapLink" href="#" target="_blank" rel="noopener noreferrer" class="map-link-btn"
+                  style="display: none;">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
                     <polyline points="15 3 21 3 21 9"></polyline>
@@ -232,6 +289,108 @@
                   <span>Open on Google Maps</span>
                 </a>
               </div>
+            </div>
+
+            <!-- Field 4: Date Of Mapping with 1-Tap Pop Date Picker -->
+            <div class="form-group" id="group-date-mapping">
+              <div class="label-with-action">
+                <label for="fieldDateMapping" class="form-label">
+                  <span>Date of Mapping</span>
+                  <span class="req-star">*</span>
+                </label>
+                <button type="button" id="todayDateBtn" class="btn-today-chip"
+                  title="Set to Today's Date">Today</button>
+              </div>
+              <div class="input-wrapper date-picker-wrapper">
+                <div class="input-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                  </svg>
+                </div>
+                <input type="date" id="fieldDateMapping" name="date_of_mapping" class="form-control date-control"
+                  required>
+                <button type="button" id="popDatePickerBtn" class="btn-pop-date" title="Pop Open Calendar Date Picker">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                  </svg>
+                  <span>Pop Date</span>
+                </button>
+              </div>
+              <span class="error-text">Please select the Date Of Mapping.</span>
+            </div>
+
+            <!-- Field 5: Province -->
+            <div class="form-group" id="group-province">
+              <label for="fieldProvince" class="form-label">
+                <span>Province</span>
+                <span class="req-star">*</span>
+              </label>
+              <div class="input-wrapper">
+                <div class="input-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon>
+                    <line x1="8" y1="2" x2="8" y2="18"></line>
+                    <line x1="16" y1="6" x2="16" y2="22"></line>
+                  </svg>
+                </div>
+                <input type="text" id="fieldProvince" name="province" class="form-control" list="provinceList"
+                  placeholder="Select or type province (e.g. Sindh, Punjab...)" required autocomplete="off">
+                <datalist id="provinceList">
+                  <option value="Sindh"></option>
+                  <option value="Punjab"></option>
+                  <option value="Khyber Pakhtunkhwa"></option>
+                  <option value="Balochistan"></option>
+                  <option value="Islamabad Capital Territory"></option>
+                  <option value="Gilgit-Baltistan"></option>
+                  <option value="Azad Jammu & Kashmir"></option>
+                </datalist>
+              </div>
+              <span class="error-text">Please enter the Province.</span>
+            </div>
+
+            <!-- Field 6: District -->
+            <div class="form-group" id="group-district">
+              <label for="fieldDistrict" class="form-label">
+                <span>District</span>
+                <span class="req-star">*</span>
+              </label>
+              <div class="input-wrapper">
+                <div class="input-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path>
+                    <path d="M2 12h20"></path>
+                  </svg>
+                </div>
+                <input type="text" id="fieldDistrict" name="district" class="form-control"
+                  placeholder="e.g. Karachi Central, Hyderabad, Quetta, Lahore" required autocomplete="off">
+              </div>
+              <span class="error-text">Please enter the District.</span>
+            </div>
+
+            <!-- Field 7: Name of Staff -->
+            <div class="form-group" id="group-name-staff">
+              <label for="fieldNameOfStaff" class="form-label">
+                <span>Name of Staff</span>
+                <span class="req-star">*</span>
+              </label>
+              <div class="input-wrapper">
+                <div class="input-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                  </svg>
+                </div>
+                <input type="text" id="fieldNameOfStaff" name="name_of_staff" class="form-control"
+                  placeholder="e.g. Surveyor / Field Staff Name" required autocomplete="off">
+              </div>
+              <span class="error-text">Please enter the Name of Staff.</span>
             </div>
 
             <!-- Form Actions -->
@@ -261,16 +420,17 @@
       <!-- Section 2: Recent Submissions & Offline Table -->
       <section class="records-section" id="viewHistorySection">
         <div class="card glass-card records-card">
-          <div class="card-header">
+          <div class="card-header records-header">
             <div>
               <div class="flex-center gap-2">
                 <h2 class="card-title">Field Records Log</h2>
                 <span class="count-badge" id="recordCount">0</span>
               </div>
-              <p class="card-desc">Saved on device & synced with Google Sheets</p>
+              <p class="card-desc">Saved locally on device & synced with Google Sheets</p>
             </div>
             <div class="actions-group">
-              <button id="syncTableBtn" class="btn-ghost text-accent" title="Sync all pending offline entries" style="display: none;">
+              <button id="syncTableBtn" class="btn-ghost text-accent" title="Sync all pending offline entries"
+                style="display: none;">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                   <path d="M23 4v6h-6"></path>
                   <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
@@ -283,7 +443,7 @@
                   <polyline points="7 10 12 15 17 10"></polyline>
                   <line x1="12" y1="15" x2="12" y2="3"></line>
                 </svg>
-                CSV
+                <span>CSV</span>
               </button>
               <button id="clearHistoryBtn" class="btn-ghost text-danger" title="Clear table history">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -294,32 +454,78 @@
             </div>
           </div>
 
-          <!-- Responsive Table -->
-          <div class="table-responsive">
+          <!-- History Responsive Controls Toolbar -->
+          <div class="history-toolbar">
+            <!-- Search Filter Input -->
+            <div class="history-search-wrapper">
+              <div class="search-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+              </div>
+              <input type="text" id="historySearchInput" class="history-search-input"
+                placeholder="Search Reg No, Center, Staff, District, Province..." autocomplete="off">
+              <button type="button" id="clearSearchBtn" class="btn-clear-search" style="display: none;"
+                title="Clear search">&times;</button>
+            </div>
+
+            <!-- View Layout Toggle (Table vs Cards) -->
+            <div class="history-view-toggle">
+              <button type="button" id="viewTableBtn" class="view-toggle-btn active" title="Switch to Table Grid">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+                  <line x1="3" y1="9" x2="21" y2="9"></line>
+                  <line x1="3" y1="15" x2="21" y2="15"></line>
+                  <line x1="9" y1="3" x2="9" y2="21"></line>
+                </svg>
+                <span>Table</span>
+              </button>
+              <button type="button" id="viewCardsBtn" class="view-toggle-btn" title="Switch to Mobile Card View">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="14" width="7" height="7"></rect>
+                  <rect x="3" y="14" width="7" height="7"></rect>
+                </svg>
+                <span>Cards</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Responsive Table Container -->
+          <div class="table-responsive" id="tableContainer">
             <table class="data-table" id="submissionsTable">
               <thead>
                 <tr>
-                  <th>#</th>
-                  <th>Center_Code</th>
+                  <th class="th-num">#</th>
+                  <th>Center Code</th>
                   <th>Reg No</th>
                   <th>Coordinates</th>
+                  <th>Date of Mapping</th>
+                  <th>Province</th>
+                  <th>District</th>
+                  <th>Name of Staff</th>
                   <th>Status</th>
                   <th>Time</th>
                 </tr>
               </thead>
               <tbody id="tableBody">
                 <tr class="empty-row" id="emptyStateRow">
-                  <td colspan="6">
+                  <td colspan="10">
                     <div class="empty-state">
                       <div class="empty-icon">📍</div>
                       <h4>No field records recorded yet</h4>
-                      <p>Capture GPS coordinates and submit even if offline.</p>
+                      <p>Fill out the mapping form and submit even if offline.</p>
                     </div>
                   </td>
                 </tr>
               </tbody>
             </table>
           </div>
+
+          <!-- Responsive Mobile Cards Container (Dynamic) -->
+          <div class="cards-view-grid" id="cardsContainer" style="display: none;"></div>
         </div>
       </section>
     </main>
@@ -343,14 +549,16 @@
 
       <div class="modal-body">
         <p class="modal-text">
-          Paste your <strong>Google Apps Script Web App URL</strong> below. Offline entries will be queued and sent to this endpoint when internet is available.
+          Paste your <strong>Google Apps Script Web App URL</strong> below. Offline entries will be queued and sent to
+          this endpoint when internet is available.
         </p>
 
         <div class="form-group">
           <label for="scriptUrlInput" class="form-label">Apps Script Web App URL</label>
           <input type="url" id="scriptUrlInput" class="form-control code-font"
             placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off" autocapitalize="none">
-          <span class="input-hint">Starts with <code>https://script.google.com/macros/s/</code> and ends with <code>/exec</code></span>
+          <span class="input-hint">Starts with <code>https://script.google.com/macros/s/</code> and ends with
+            <code>/exec</code></span>
         </div>
 
         <div class="test-connection-box">
@@ -391,7 +599,8 @@
             <div class="step-num">1</div>
             <div class="step-content">
               <h4>Works 100% Without Internet</h4>
-              <p>When you are in remote field areas without signal, simply keep entering data. Rows are stored in your phone's safe offline storage.</p>
+              <p>When you are in remote field areas without signal, simply keep entering data. Rows are stored in your
+                phone's safe offline storage.</p>
             </div>
           </div>
 
@@ -399,7 +608,8 @@
             <div class="step-num">2</div>
             <div class="step-content">
               <h4>Satellite GPS Always Works</h4>
-              <p>Phone GPS uses direct satellite radio signals, not mobile data. You can capture exact coordinates anywhere on Earth.</p>
+              <p>Phone GPS uses direct satellite radio signals, not mobile data. You can capture exact coordinates
+                anywhere on Earth.</p>
             </div>
           </div>
 
@@ -407,7 +617,8 @@
             <div class="step-num">3</div>
             <div class="step-content">
               <h4>Automatic Sync on Reconnecting</h4>
-              <p>As soon as your phone gets 3G/4G or Wi-Fi, GeoSync automatically uploads all pending rows to your Google Sheet without you lifting a finger!</p>
+              <p>As soon as your phone gets 3G/4G or Wi-Fi, GeoSync automatically uploads all pending rows to your
+                Google Sheet without you lifting a finger!</p>
             </div>
           </div>
 
@@ -433,6 +644,221 @@
 
       <div class="modal-footer">
         <button type="button" class="btn-primary" id="gotItGuideBtn">Got It &rarr; Back to Form</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add to Mobile Home Screen Modal -->
+  <div id="installModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="installModalTitle">
+    <div class="modal-card glass-modal install-modal-box">
+      <div class="modal-header">
+        <div class="modal-title-with-icon">
+          <div class="modal-logo-frame">
+            <img src="malc logo.png" alt="MALC Logo" class="modal-malc-logo">
+          </div>
+          <div>
+            <h3 id="installModalTitle">Add Field Mapping to Home Screen</h3>
+            <p class="modal-subtitle">Create a 1-tap mobile app shortcut</p>
+          </div>
+        </div>
+        <button class="modal-close" id="closeInstallModal" aria-label="Close modal">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Direct Install Prompt Box (Shown if browser supports native prompt) -->
+        <div id="nativeInstallBox" class="native-install-box" style="display: none;">
+          <div class="native-install-text">
+            <strong>Ready for 1-Tap Installation</strong>
+            <p>Your browser supports instant home screen installation.</p>
+          </div>
+          <button type="button" id="triggerNativeInstallBtn" class="btn-primary btn-install-now">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
+              <rect x="5" y="2" width="14" height="20" rx="3"></rect>
+              <line x1="12" y1="18" x2="12.01" y2="18"></line>
+              <path d="M12 7v5m-2.5-2.5l2.5 2.5 2.5-2.5"></path>
+            </svg>
+            <span>Tap to Install Field Mapping</span>
+          </button>
+        </div>
+
+        <!-- Platform Switch Tabs -->
+        <div class="platform-tabs" role="tablist">
+          <button type="button" class="platform-tab-btn active" id="tabAndroidBtn" role="tab" aria-selected="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path
+                d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-1.0007 0-.551.4482-.9992.9993-.9992.5511 0 .9993.4482.9993.9992 0 .5521-.4482 1.0007-.9993 1.0007m-11.046 0c-.5511 0-.9993-.4486-.9993-1.0007 0-.551.4482-.9992.9993-.9992.5511 0 .9993.4482.9993.9992 0 .5521-.4482 1.0007-.9993 1.0007m11.4045-6.02l1.996-3.4572c.1126-.1955.0456-.4445-.1499-.5571-.1955-.1126-.4445-.0456-.5571.1499l-2.0221 3.5028c-1.5037-.6873-3.1818-1.0706-4.9484-1.0706s-3.4447.3833-4.9484 1.0706L5.234 5.457c-.1126-.1955-.3616-.2625-.5571-.1499-.1955.1126-.2625.3616-.1499.5571l1.996 3.4572C2.973 11.233  probed 1 15.132 1 19.5h22c0-4.368-1.973-8.267-5.1185-10.1786" />
+            </svg>
+            <span>Android (Chrome)</span>
+          </button>
+          <button type="button" class="platform-tab-btn" id="tabIosBtn" role="tab" aria-selected="false">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path
+                d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.63-.76 1.05-1.82.93-2.88-.9.04-2 .6-2.64 1.36-.56.65-1.06 1.73-.93 2.76 1.01.08 2.01-.48 2.64-1.24z" />
+            </svg>
+            <span>iPhone / iPad (Safari)</span>
+          </button>
+        </div>
+
+        <!-- Android Guide View -->
+        <div id="androidGuideView" class="platform-step-guide">
+          <div class="guide-steps">
+            <div class="guide-step">
+              <div class="step-num">1</div>
+              <div class="step-content">
+                <h4>Open Chrome Menu</h4>
+                <p>Tap the <strong>three dots (⋮)</strong> menu icon at the top right of your Chrome browser.</p>
+              </div>
+            </div>
+            <div class="guide-step">
+              <div class="step-num">2</div>
+              <div class="step-content">
+                <h4>Select "Add to Home screen"</h4>
+                <p>From the dropdown menu, tap <strong>"Add to Home screen"</strong> or <strong>"Install app"</strong>.
+                </p>
+              </div>
+            </div>
+            <div class="guide-step">
+              <div class="step-num">3</div>
+              <div class="step-content">
+                <h4>Confirm "Install" / "Add"</h4>
+                <p>Tap <strong>Add</strong>. The official <strong>Field Mapping</strong> icon will now sit on your
+                  phone's home screen!</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- iOS Guide View -->
+        <div id="iosGuideView" class="platform-step-guide" style="display: none;">
+          <div class="guide-steps">
+            <div class="guide-step">
+              <div class="step-num">1</div>
+              <div class="step-content">
+                <h4>Tap the Share Button</h4>
+                <p>In Safari, tap the <strong>Share</strong> button at the bottom of the screen (the box with an upward
+                  arrow <span class="share-icon-glyph">⎋</span>).</p>
+              </div>
+            </div>
+            <div class="guide-step">
+              <div class="step-num">2</div>
+              <div class="step-content">
+                <h4>Tap "Add to Home Screen"</h4>
+                <p>Scroll down the share sheet options and tap <strong>"Add to Home Screen"</strong> (indicated by a
+                  <strong>[+]</strong> icon).
+                </p>
+              </div>
+            </div>
+            <div class="guide-step">
+              <div class="step-num">3</div>
+              <div class="step-content">
+                <h4>Tap "Add" in Top Right</h4>
+                <p>Tap <strong>Add</strong> in the top-right corner. The <strong>Field Mapping</strong> app will open in
+                  full-screen standalone
+                  mode!</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="install-footer-tip">
+          <span class="tip-badge">💡 Tip</span>
+          <span>Once added, the app runs completely offline without opening your web browser first.</span>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn-primary" id="gotItInstallBtn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Login / Access Password Gate -->
+  <div id="loginOverlay" class="login-overlay active" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+    <div class="login-card-container">
+      <div class="login-card" id="loginCard">
+        <!-- Brand Header -->
+        <div class="login-brand">
+          <div class="login-logo-ring">
+            <img src="malc logo.png" alt="MALC Logo" class="login-malc-logo">
+          </div>
+          <div class="login-badge">
+            <span class="login-badge-dot"></span>
+            <span>Authorized Access Only</span>
+          </div>
+          <h2 id="loginTitle" class="login-title">Field Mapping</h2>
+          <p class="login-subtitle">Marie Adelaide Leprosy Centre</p>
+        </div>
+
+        <!-- Login Form -->
+        <form id="loginForm" class="login-form" autocomplete="off" onsubmit="return false;">
+          <div class="login-field-group">
+            <div class="login-label-row">
+              <label for="loginPassword" class="login-label">Access Password</label>
+              <span class="login-label-tag">Required</span>
+            </div>
+            <div class="login-input-wrap">
+              <span class="login-input-icon" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+              </span>
+              <input type="password" id="loginPassword" class="login-input" placeholder="Enter password..."
+                autocomplete="current-password" autocapitalize="none" autocorrect="off" spellcheck="false" autofocus
+                required>
+              <button type="button" id="togglePasswordBtn" class="login-pwd-toggle"
+                aria-label="Toggle password visibility" title="Show/Hide Password">
+                <svg id="eyeIconOpen" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="2.2">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+                <svg id="eyeIconClosed" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="2.2" style="display: none;">
+                  <path
+                    d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24">
+                  </path>
+                  <line x1="1" y1="1" x2="23" y2="23"></line>
+                </svg>
+              </button>
+            </div>
+            <div id="loginErrorMsg" class="login-error-msg" style="display: none;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+              <span id="loginErrorText">Incorrect password. Please try again.</span>
+            </div>
+          </div>
+
+          <div class="login-options-row">
+            <label class="login-remember-wrap">
+              <input type="checkbox" id="loginRememberMe" checked>
+              <span class="remember-label-text">Keep signed in on this device</span>
+            </label>
+          </div>
+
+          <button type="submit" id="loginSubmitBtn" class="btn-login-submit">
+            <span id="loginBtnText">Unlock App</span>
+            <span class="login-btn-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+                <polyline points="12 5 19 12 12 19"></polyline>
+              </svg>
+            </span>
+          </button>
+        </form>
+
+        <div class="login-card-footer">
+          <div class="login-feature-pill">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            </svg>
+            <span>Offline-Ready GPS Portal</span>
+          </div>
+          <p class="login-note">All field data is encrypted and saved securely</p>
+        </div>
       </div>
     </div>
   </div>

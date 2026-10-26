@@ -1,10 +1,11 @@
-const CACHE_NAME = 'geosync-offline-v1';
+const CACHE_NAME = 'geosync-offline-v4';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './style.css',
   './app.js',
-  './manifest.json'
+  './manifest.json',
+  './malc logo.png'
 ];
 
 // Install Event: Cache Core Assets

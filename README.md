@@ -4,6 +4,14 @@ An offline-capable Progressive Web Application (PWA) designed for field teams to
 
 ---
 
+## 🔒 App Access Password
+The application is protected with an authorization gate:
+- **Password**: `malcpak`
+- Users can choose to stay logged in on their device.
+- Users can lock the app or log out anytime by tapping the **Lock** icon in the top header.
+
+---
+
 ## 📡 How Offline Mode Works in the Field
 
 1. **Works Completely Without Internet (PWA)**:

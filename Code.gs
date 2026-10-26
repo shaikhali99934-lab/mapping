@@ -17,20 +17,34 @@ function doPost(e) {
       data = e.parameter;
     }
 
-    // New field mappings: Center_Code, Reg No, Coordinates
+    // Field Mapping columns:
+    // Center_Code | Reg No | Coordinates | Date Of Mappng | Province | District | Name of Staff | Timestamp
     var centerCode = data.center_code || data.Center_Code || '';
     var regNo = data.reg_no || data.Reg_No || data['Reg No'] || '';
     var coordinates = data.coordinates || data.Coordinates || '';
+    var dateOfMapping = data.date_of_mapping || data['Date Of Mappng'] || data.dateOfMapping || data.Date_Of_Mapping || '';
+    var province = data.province || data.Province || '';
+    var district = data.district || data.District || '';
+    var nameOfStaff = data.name_of_staff || data['Name of Staff'] || data.nameOfStaff || data.Name_Of_Staff || '';
     var timestamp = new Date().toLocaleString();
 
-    // Append new row matching your updated columns: Center_Code | Reg No | Coordinates | Timestamp
-    sheet.appendRow([centerCode, regNo, coordinates, timestamp]);
+    // Append new row matching the columns
+    sheet.appendRow([centerCode, regNo, coordinates, dateOfMapping, province, district, nameOfStaff, timestamp]);
 
     return ContentService
       .createTextOutput(JSON.stringify({ 
         status: 'success', 
         message: 'Row added successfully',
-        data: { center_code: centerCode, reg_no: regNo, coordinates: coordinates, timestamp: timestamp }
+        data: {
+          center_code: centerCode,
+          reg_no: regNo,
+          coordinates: coordinates,
+          date_of_mapping: dateOfMapping,
+          province: province,
+          district: district,
+          name_of_staff: nameOfStaff,
+          timestamp: timestamp
+        }
       }))
       .setMimeType(ContentService.MimeType.JSON);
 
@@ -51,7 +65,7 @@ function doGet(e) {
   return ContentService
     .createTextOutput(JSON.stringify({
       status: 'active',
-      message: 'Field DataSync Endpoint is active and ready to record Center_Code, Reg No, and Coordinates.'
+      message: 'Field Mapping Endpoint is active and ready to record entries.'
     }))
     .setMimeType(ContentService.MimeType.JSON);
 }

@@ -18,6 +18,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const centerCodeInput = document.getElementById('fieldCenterCode');
   const regNoInput = document.getElementById('fieldRegNo');
   const coordinatesInput = document.getElementById('fieldCoordinates');
+  const fieldDateMapping = document.getElementById('fieldDateMapping');
+  const popDatePickerBtn = document.getElementById('popDatePickerBtn');
+  const todayDateBtn = document.getElementById('todayDateBtn');
+  const fieldProvince = document.getElementById('fieldProvince');
+  const fieldDistrict = document.getElementById('fieldDistrict');
+  const fieldNameOfStaff = document.getElementById('fieldNameOfStaff');
   const captureGpsBtn = document.getElementById('captureGpsBtn');
   const gpsBtnTitle = document.getElementById('gpsBtnTitle');
   const gpsBtnSubtitle = document.getElementById('gpsBtnSubtitle');
@@ -46,6 +52,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const tableBody = document.getElementById('tableBody');
   const exportCsvBtn = document.getElementById('exportCsvBtn');
   const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+  const historySearchInput = document.getElementById('historySearchInput');
+  const clearSearchBtn = document.getElementById('clearSearchBtn');
+  const viewTableBtn = document.getElementById('viewTableBtn');
+  const viewCardsBtn = document.getElementById('viewCardsBtn');
+  const tableContainer = document.getElementById('tableContainer');
+  const cardsContainer = document.getElementById('cardsContainer');
+
+  let currentHistoryView = localStorage.getItem('field_mapping_view_pref') || 'table';
+  let historySearchTerm = '';
 
   // Mobile Tabs
   const tabEntryBtn = document.getElementById('tabEntryBtn');
@@ -71,6 +86,40 @@ document.addEventListener('DOMContentLoaded', () => {
   const codeSnippetContent = document.getElementById('codeSnippetContent');
   const toastContainer = document.getElementById('toastContainer');
 
+  // Mobile Home Screen Install Elements
+  const headerInstallBtn = document.getElementById('headerInstallBtn');
+  const mainInstallBtn = document.getElementById('mainInstallBtn');
+  const installAppBanner = document.getElementById('installAppBanner');
+  const dismissInstallBanner = document.getElementById('dismissInstallBanner');
+  const installModal = document.getElementById('installModal');
+  const closeInstallModal = document.getElementById('closeInstallModal');
+  const gotItInstallBtn = document.getElementById('gotItInstallBtn');
+  const triggerNativeInstallBtn = document.getElementById('triggerNativeInstallBtn');
+  const nativeInstallBox = document.getElementById('nativeInstallBox');
+  const tabAndroidBtn = document.getElementById('tabAndroidBtn');
+  const tabIosBtn = document.getElementById('tabIosBtn');
+  const androidGuideView = document.getElementById('androidGuideView');
+  const iosGuideView = document.getElementById('iosGuideView');
+
+  // App Lock & Authentication Elements
+  const APP_PASSWORD = 'malcpak';
+  const AUTH_STORAGE_KEY = 'field_mapping_auth';
+  const AUTH_TOKEN_VAL = 'malcpak_authenticated';
+
+  const loginOverlay = document.getElementById('loginOverlay');
+  const loginCard = document.getElementById('loginCard');
+  const loginForm = document.getElementById('loginForm');
+  const loginPassword = document.getElementById('loginPassword');
+  const togglePasswordBtn = document.getElementById('togglePasswordBtn');
+  const eyeIconOpen = document.getElementById('eyeIconOpen');
+  const eyeIconClosed = document.getElementById('eyeIconClosed');
+  const loginErrorMsg = document.getElementById('loginErrorMsg');
+  const loginErrorText = document.getElementById('loginErrorText');
+  const loginRememberMe = document.getElementById('loginRememberMe');
+  const loginSubmitBtn = document.getElementById('loginSubmitBtn');
+  const loginBtnText = document.getElementById('loginBtnText');
+  const lockAppBtn = document.getElementById('lockAppBtn');
+
   // Google Apps Script snippet shown in guide
   const APPS_SCRIPT_CODE = `function doPost(e) {
   var lock = LockService.getScriptLock();
@@ -94,10 +143,14 @@ document.addEventListener('DOMContentLoaded', () => {
     var centerCode = data.center_code || data.Center_Code || '';
     var regNo = data.reg_no || data.Reg_No || data['Reg No'] || '';
     var coordinates = data.coordinates || data.Coordinates || '';
+    var dateOfMapping = data.date_of_mapping || data['Date Of Mappng'] || data.dateOfMapping || '';
+    var province = data.province || data.Province || '';
+    var district = data.district || data.District || '';
+    var nameOfStaff = data.name_of_staff || data['Name of Staff'] || data.nameOfStaff || '';
     var timestamp = new Date().toLocaleString();
 
-    // Appends: Center_Code | Reg No | Coordinates | Timestamp
-    sheet.appendRow([centerCode, regNo, coordinates, timestamp]);
+    // Appends: Center_Code | Reg No | Coordinates | Date Of Mappng | Province | District | Name of Staff | Timestamp
+    sheet.appendRow([centerCode, regNo, coordinates, dateOfMapping, province, district, nameOfStaff, timestamp]);
 
     return ContentService
       .createTextOutput(JSON.stringify({ status: 'success', message: 'Row added' }))
@@ -115,7 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function doGet(e) {
   return ContentService
-    .createTextOutput(JSON.stringify({ status: 'active', message: 'Ready' }))
+    .createTextOutput(JSON.stringify({ status: 'active', message: 'Field Mapping Ready' }))
     .setMimeType(ContentService.MimeType.JSON);
 }`;
 
@@ -151,6 +204,7 @@ function doGet(e) {
   updateSyncBadges();
   renderHistoryTable();
   initMobileTabs();
+  initAuth();
 
   // Show setup banner if URL is missing
   if (!scriptUrl) {
@@ -374,6 +428,61 @@ function doGet(e) {
     validateField(regNoInput, 'group-reg-no', val => val.trim().length >= 1);
   });
 
+  // Pre-fill Date Of Mapping to Today's Date (YYYY-MM-DD)
+  if (fieldDateMapping) {
+    fieldDateMapping.value = new Date().toISOString().slice(0, 10);
+  }
+
+  // Pop Date Picker Handler
+  function popOpenDatePicker() {
+    if (!fieldDateMapping) return;
+    try {
+      if (typeof fieldDateMapping.showPicker === 'function') {
+        fieldDateMapping.showPicker();
+      } else {
+        fieldDateMapping.focus();
+      }
+    } catch (err) {
+      fieldDateMapping.focus();
+    }
+  }
+
+  if (popDatePickerBtn) popDatePickerBtn.addEventListener('click', popOpenDatePicker);
+  if (fieldDateMapping) {
+    fieldDateMapping.addEventListener('click', popOpenDatePicker);
+    fieldDateMapping.addEventListener('input', () => {
+      validateField(fieldDateMapping, 'group-date-mapping', val => val.trim().length >= 1);
+    });
+  }
+
+  if (todayDateBtn) {
+    todayDateBtn.addEventListener('click', () => {
+      if (fieldDateMapping) {
+        fieldDateMapping.value = new Date().toISOString().slice(0, 10);
+        validateField(fieldDateMapping, 'group-date-mapping', val => val.trim().length >= 1);
+        showToast("Date set to Today", "info");
+      }
+    });
+  }
+
+  if (fieldProvince) {
+    fieldProvince.addEventListener('input', () => {
+      validateField(fieldProvince, 'group-province', val => val.trim().length >= 1);
+    });
+  }
+
+  if (fieldDistrict) {
+    fieldDistrict.addEventListener('input', () => {
+      validateField(fieldDistrict, 'group-district', val => val.trim().length >= 1);
+    });
+  }
+
+  if (fieldNameOfStaff) {
+    fieldNameOfStaff.addEventListener('input', () => {
+      validateField(fieldNameOfStaff, 'group-name-staff', val => val.trim().length >= 1);
+    });
+  }
+
   // ================= FORM SUBMISSION (ONLINE & OFFLINE) =================
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -381,8 +490,12 @@ function doGet(e) {
     const isCenterValid = validateField(centerCodeInput, 'group-center-code', val => val.trim().length >= 1);
     const isRegValid = validateField(regNoInput, 'group-reg-no', val => val.trim().length >= 1);
     const isCoordValid = validateField(coordinatesInput, 'group-coordinates', isValidCoordinates);
+    const isDateValid = validateField(fieldDateMapping, 'group-date-mapping', val => val.trim().length >= 1);
+    const isProvinceValid = validateField(fieldProvince, 'group-province', val => val.trim().length >= 1);
+    const isDistrictValid = validateField(fieldDistrict, 'group-district', val => val.trim().length >= 1);
+    const isStaffValid = validateField(fieldNameOfStaff, 'group-name-staff', val => val.trim().length >= 1);
 
-    if (!isCenterValid || !isRegValid || !isCoordValid) {
+    if (!isCenterValid || !isRegValid || !isCoordValid || !isDateValid || !isProvinceValid || !isDistrictValid || !isStaffValid) {
       showToast('Please fill out all required fields properly.', 'error');
       return;
     }
@@ -392,6 +505,10 @@ function doGet(e) {
       center_code: centerCodeInput.value.trim(),
       reg_no: regNoInput.value.trim(),
       coordinates: coordinatesInput.value.trim(),
+      date_of_mapping: fieldDateMapping ? fieldDateMapping.value.trim() : '',
+      province: fieldProvince ? fieldProvince.value.trim() : '',
+      district: fieldDistrict ? fieldDistrict.value.trim() : '',
+      name_of_staff: fieldNameOfStaff ? fieldNameOfStaff.value.trim() : '',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
       status: 'pending' // Default until confirmed
     };
@@ -431,10 +548,15 @@ function doGet(e) {
       navigator.vibrate([30, 50, 30]);
     }
 
-    // Clear form for next entry
+    // Clear form for next entry (retain date to today)
     centerCodeInput.value = '';
     regNoInput.value = '';
     coordinatesInput.value = '';
+    if (fieldDateMapping) fieldDateMapping.value = new Date().toISOString().slice(0, 10);
+    if (fieldProvince) fieldProvince.value = '';
+    if (fieldDistrict) fieldDistrict.value = '';
+    if (fieldNameOfStaff) fieldNameOfStaff.value = '';
+
     captureGpsBtn.classList.remove('captured');
     gpsBtnTitle.textContent = 'Tap to Capture Current Location';
     gpsBtnSubtitle.textContent = 'Works offline via satellite GPS';
@@ -450,6 +572,11 @@ function doGet(e) {
     centerCodeInput.value = '';
     regNoInput.value = '';
     coordinatesInput.value = '';
+    if (fieldDateMapping) fieldDateMapping.value = new Date().toISOString().slice(0, 10);
+    if (fieldProvince) fieldProvince.value = '';
+    if (fieldDistrict) fieldDistrict.value = '';
+    if (fieldNameOfStaff) fieldNameOfStaff.value = '';
+
     captureGpsBtn.classList.remove('captured');
     gpsBtnTitle.textContent = 'Tap to Capture Current Location';
     gpsBtnSubtitle.textContent = 'Works offline via satellite GPS';
@@ -475,9 +602,13 @@ function doGet(e) {
       return true;
     } catch (e) {
       const formData = new FormData();
-      formData.append('center_code', data.center_code);
-      formData.append('reg_no', data.reg_no);
-      formData.append('coordinates', data.coordinates);
+      formData.append('center_code', data.center_code || '');
+      formData.append('reg_no', data.reg_no || '');
+      formData.append('coordinates', data.coordinates || '');
+      formData.append('date_of_mapping', data.date_of_mapping || '');
+      formData.append('province', data.province || '');
+      formData.append('district', data.district || '');
+      formData.append('name_of_staff', data.name_of_staff || '');
 
       await fetch(url, {
         method: 'POST',
@@ -489,6 +620,7 @@ function doGet(e) {
   }
 
   function validateField(inputEl, groupId, validationFn) {
+    if (!inputEl) return true;
     const group = document.getElementById(groupId);
     if (!group) return true;
     const isValid = validationFn(inputEl.value);
@@ -510,44 +642,201 @@ function doGet(e) {
     }
   }
 
+  // View Toggle Handling
+  if (viewTableBtn && viewCardsBtn) {
+    viewTableBtn.addEventListener('click', () => setHistoryView('table'));
+    viewCardsBtn.addEventListener('click', () => setHistoryView('cards'));
+  }
+
+  function setHistoryView(view) {
+    currentHistoryView = view;
+    localStorage.setItem('field_mapping_view_pref', view);
+    if (view === 'table') {
+      viewTableBtn.classList.add('active');
+      viewCardsBtn.classList.remove('active');
+      if (tableContainer) tableContainer.style.display = 'block';
+      if (cardsContainer) cardsContainer.style.display = 'none';
+    } else {
+      viewCardsBtn.classList.add('active');
+      viewTableBtn.classList.remove('active');
+      if (tableContainer) tableContainer.style.display = 'none';
+      if (cardsContainer) cardsContainer.style.display = 'flex';
+    }
+  }
+
+  // Live Search Filtering
+  if (historySearchInput) {
+    historySearchInput.addEventListener('input', (e) => {
+      historySearchTerm = e.target.value.trim().toLowerCase();
+      if (clearSearchBtn) {
+        clearSearchBtn.style.display = historySearchTerm ? 'inline-block' : 'none';
+      }
+      renderHistoryTable();
+    });
+  }
+
+  if (clearSearchBtn) {
+    clearSearchBtn.addEventListener('click', () => {
+      if (historySearchInput) {
+        historySearchInput.value = '';
+        historySearchTerm = '';
+        clearSearchBtn.style.display = 'none';
+        historySearchInput.focus();
+        renderHistoryTable();
+      }
+    });
+  }
+
   function renderHistoryTable() {
     recordCountBadge.textContent = submissions.length;
     tabRecordCount.textContent = submissions.length;
 
-    if (submissions.length === 0) {
+    // Filter submissions if search query is active
+    const filteredSubmissions = historySearchTerm
+      ? submissions.filter(item => {
+          const str = [
+            item.center_code || '',
+            item.reg_no || '',
+            item.coordinates || '',
+            item.date_of_mapping || '',
+            item.province || '',
+            item.district || '',
+            item.name_of_staff || ''
+          ].join(' ').toLowerCase();
+          return str.includes(historySearchTerm);
+        })
+      : submissions;
+
+    // Update count badge when filtered
+    if (historySearchTerm) {
+      recordCountBadge.textContent = `${filteredSubmissions.length} of ${submissions.length}`;
+    }
+
+    if (filteredSubmissions.length === 0) {
+      const emptyMsg = submissions.length === 0
+        ? 'No field records recorded yet'
+        : 'No records matching your search';
+      const emptyDesc = submissions.length === 0
+        ? 'Fill out the mapping form and submit even if offline.'
+        : 'Try searching with a different keyword or clear the search filter.';
+
       tableBody.innerHTML = `
         <tr class="empty-row" id="emptyStateRow">
-          <td colspan="6">
+          <td colspan="10">
             <div class="empty-state">
               <div class="empty-icon">📍</div>
-              <h4>No field records recorded yet</h4>
-              <p>Capture GPS coordinates and submit even if offline.</p>
+              <h4>${emptyMsg}</h4>
+              <p>${emptyDesc}</p>
             </div>
           </td>
         </tr>
       `;
+
+      if (cardsContainer) {
+        cardsContainer.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">📍</div>
+            <h4>${emptyMsg}</h4>
+            <p>${emptyDesc}</p>
+          </div>
+        `;
+      }
+      setHistoryView(currentHistoryView);
       return;
     }
 
-    tableBody.innerHTML = submissions.map((item, index) => {
+    // 1. Render Spreadsheet Table View
+    tableBody.innerHTML = filteredSubmissions.map((item, index) => {
       const isSynced = item.status === 'synced';
       const statusBadge = isSynced
         ? `<span class="badge-status synced">✓ In Sheet</span>`
-        : `<span class="badge-status pending">⏳ Offline (Pending)</span>`;
+        : `<span class="badge-status pending">⏳ Offline</span>`;
+      const cleanCoords = (item.coordinates || '').replace(/\s+/g, '');
 
       return `
         <tr>
-          <td style="color: var(--text-dim); font-size: 0.78rem;">#${submissions.length - index}</td>
-          <td><span class="badge" style="font-size: 0.7rem; margin: 0;">${escapeHtml(item.center_code)}</span></td>
-          <td style="font-weight: 700;">${escapeHtml(item.reg_no)}</td>
-          <td style="font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: #a7f3d0;">
-            ${escapeHtml(item.coordinates)}
+          <td style="color: var(--text-dim); font-size: 0.78rem; text-align: center;">#${filteredSubmissions.length - index}</td>
+          <td><span class="badge" style="font-size: 0.72rem; margin: 0;">${escapeHtml(item.center_code)}</span></td>
+          <td style="font-weight: 700; color: #0f172a;">${escapeHtml(item.reg_no)}</td>
+          <td>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: #0369a1; font-weight: 600;">
+              ${escapeHtml(item.coordinates)}
+            </span>
+            ${cleanCoords ? `
+              <a href="https://www.google.com/maps?q=${encodeURIComponent(cleanCoords)}" target="_blank" rel="noopener" class="map-table-btn" title="Open in Google Maps">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                <span>Map</span>
+              </a>
+            ` : ''}
           </td>
+          <td style="font-size: 0.8rem; font-weight: 600; color: #334155;">${escapeHtml(item.date_of_mapping || '-')}</td>
+          <td style="font-size: 0.8rem; color: #334155;">${escapeHtml(item.province || '-')}</td>
+          <td style="font-size: 0.8rem; color: #334155;">${escapeHtml(item.district || '-')}</td>
+          <td style="font-size: 0.8rem; font-weight: 600; color: #0f172a;">${escapeHtml(item.name_of_staff || '-')}</td>
           <td>${statusBadge}</td>
-          <td style="color: var(--text-muted); font-size: 0.76rem;">${item.timestamp || 'Just now'}</td>
+          <td style="color: var(--text-muted); font-size: 0.75rem;">${item.timestamp || 'Just now'}</td>
         </tr>
       `;
     }).join('');
+
+    // 2. Render Responsive Mobile Cards View
+    if (cardsContainer) {
+      cardsContainer.innerHTML = filteredSubmissions.map((item, index) => {
+        const isSynced = item.status === 'synced';
+        const statusBadge = isSynced
+          ? `<span class="badge-status synced">✓ In Sheet</span>`
+          : `<span class="badge-status pending">⏳ Offline</span>`;
+        const cleanCoords = (item.coordinates || '').replace(/\s+/g, '');
+
+        return `
+          <div class="record-mobile-card">
+            <div class="rm-card-header">
+              <div class="rm-card-tags">
+                <span class="rm-card-index">#${filteredSubmissions.length - index}</span>
+                <span class="rm-card-center">${escapeHtml(item.center_code || 'No Center')}</span>
+              </div>
+              <div>${statusBadge}</div>
+            </div>
+
+            <div class="rm-card-title">${escapeHtml(item.reg_no || 'No Reg No')}</div>
+
+            <div class="rm-card-grid">
+              <div class="rm-field-item">
+                <span class="rm-field-label">Date of Mapping</span>
+                <span class="rm-field-val">${escapeHtml(item.date_of_mapping || '-')}</span>
+              </div>
+              <div class="rm-field-item">
+                <span class="rm-field-label">Staff Name</span>
+                <span class="rm-field-val">${escapeHtml(item.name_of_staff || '-')}</span>
+              </div>
+              <div class="rm-field-item">
+                <span class="rm-field-label">Province</span>
+                <span class="rm-field-val">${escapeHtml(item.province || '-')}</span>
+              </div>
+              <div class="rm-field-item">
+                <span class="rm-field-label">District</span>
+                <span class="rm-field-val">${escapeHtml(item.district || '-')}</span>
+              </div>
+            </div>
+
+            <div class="rm-card-coords-row">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="rm-coords-text">${escapeHtml(item.coordinates || 'No GPS')}</span>
+                ${cleanCoords ? `
+                  <a href="https://www.google.com/maps?q=${encodeURIComponent(cleanCoords)}" target="_blank" rel="noopener" class="map-table-btn" title="View location">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                    <span>Map</span>
+                  </a>
+                ` : ''}
+              </div>
+              <span class="rm-card-time">${item.timestamp || 'Just now'}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    setHistoryView(currentHistoryView);
   }
 
   function saveHistory() {
@@ -569,11 +858,25 @@ function doGet(e) {
       showToast('No records available to export.', 'info');
       return;
     }
-    const headers = ['Center_Code', 'Reg_No', 'Coordinates', 'Status', 'Timestamp'];
+    const headers = [
+      'Center_Code',
+      'Reg_No',
+      'Coordinates',
+      'Date_Of_Mapping',
+      'Province',
+      'District',
+      'Name_Of_Staff',
+      'Status',
+      'Timestamp'
+    ];
     const rows = submissions.map(s => [
       `"${(s.center_code || '').replace(/"/g, '""')}"`,
       `"${(s.reg_no || '').replace(/"/g, '""')}"`,
       `"${(s.coordinates || '').replace(/"/g, '""')}"`,
+      `"${(s.date_of_mapping || '').replace(/"/g, '""')}"`,
+      `"${(s.province || '').replace(/"/g, '""')}"`,
+      `"${(s.district || '').replace(/"/g, '""')}"`,
+      `"${(s.name_of_staff || '').replace(/"/g, '""')}"`,
       `"${s.status || 'synced'}"`,
       `"${s.timestamp || ''}"`
     ]);
@@ -582,7 +885,7 @@ function doGet(e) {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `GeoSync_Field_Records_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `Field_Mapping_Records_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -662,15 +965,135 @@ function doGet(e) {
     });
   });
 
+  // ==========================================================================
+  // PWA & Mobile Home Screen Installation Logic
+  // ==========================================================================
+  let deferredPrompt = null;
+  const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent || '');
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+  // If already running in standalone mode (already installed), hide the banner
+  if (isStandalone && installAppBanner) {
+    installAppBanner.style.display = 'none';
+  }
+
+  // Check if user previously dismissed banner in this session
+  if (sessionStorage.getItem('malc_install_dismissed') === 'true' && installAppBanner) {
+    installAppBanner.style.display = 'none';
+  }
+
+  // Capture Chromium PWA install prompt
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    if (nativeInstallBox) nativeInstallBox.style.display = 'flex';
+    if (installAppBanner && !isStandalone && sessionStorage.getItem('malc_install_dismissed') !== 'true') {
+      installAppBanner.style.display = 'flex';
+    }
+  });
+
+  window.addEventListener('appinstalled', () => {
+    deferredPrompt = null;
+    if (installAppBanner) installAppBanner.style.display = 'none';
+    if (nativeInstallBox) nativeInstallBox.style.display = 'none';
+    closeModal(installModal);
+    showToast('MALC GeoSync installed on your device!', 'success');
+  });
+
+  async function handleInstallTrigger() {
+    if (deferredPrompt) {
+      try {
+        deferredPrompt.prompt();
+        const choice = await deferredPrompt.userChoice;
+        if (choice && choice.outcome === 'accepted') {
+          showToast('MALC GeoSync icon added to your Home Screen!', 'success');
+          if (installAppBanner) installAppBanner.style.display = 'none';
+          deferredPrompt = null;
+          closeModal(installModal);
+          return;
+        }
+      } catch (err) {
+        console.warn('Install prompt error:', err);
+      }
+    }
+    showInstallGuide();
+  }
+
+  function showInstallGuide() {
+    if (deferredPrompt && nativeInstallBox) {
+      nativeInstallBox.style.display = 'flex';
+    } else if (nativeInstallBox) {
+      nativeInstallBox.style.display = 'none';
+    }
+
+    if (isIos) {
+      switchToPlatform('ios');
+    } else {
+      switchToPlatform('android');
+    }
+
+    openModal(installModal);
+  }
+
+  function switchToPlatform(platform) {
+    if (platform === 'ios') {
+      if (tabIosBtn) {
+        tabIosBtn.classList.add('active');
+        tabIosBtn.setAttribute('aria-selected', 'true');
+      }
+      if (tabAndroidBtn) {
+        tabAndroidBtn.classList.remove('active');
+        tabAndroidBtn.setAttribute('aria-selected', 'false');
+      }
+      if (iosGuideView) iosGuideView.style.display = 'block';
+      if (androidGuideView) androidGuideView.style.display = 'none';
+    } else {
+      if (tabAndroidBtn) {
+        tabAndroidBtn.classList.add('active');
+        tabAndroidBtn.setAttribute('aria-selected', 'true');
+      }
+      if (tabIosBtn) {
+        tabIosBtn.classList.remove('active');
+        tabIosBtn.setAttribute('aria-selected', 'false');
+      }
+      if (androidGuideView) androidGuideView.style.display = 'block';
+      if (iosGuideView) iosGuideView.style.display = 'none';
+    }
+  }
+
+  if (mainInstallBtn) mainInstallBtn.addEventListener('click', handleInstallTrigger);
+  if (headerInstallBtn) headerInstallBtn.addEventListener('click', handleInstallTrigger);
+  if (triggerNativeInstallBtn) triggerNativeInstallBtn.addEventListener('click', handleInstallTrigger);
+
+  if (dismissInstallBanner) {
+    dismissInstallBanner.addEventListener('click', () => {
+      if (installAppBanner) {
+        installAppBanner.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
+        installAppBanner.style.opacity = '0';
+        installAppBanner.style.transform = 'translateY(-10px)';
+        setTimeout(() => {
+          installAppBanner.style.display = 'none';
+        }, 260);
+      }
+      sessionStorage.setItem('malc_install_dismissed', 'true');
+    });
+  }
+
+  if (closeInstallModal) closeInstallModal.addEventListener('click', () => closeModal(installModal));
+  if (gotItInstallBtn) gotItInstallBtn.addEventListener('click', () => closeModal(installModal));
+
+  if (tabAndroidBtn) tabAndroidBtn.addEventListener('click', () => switchToPlatform('android'));
+  if (tabIosBtn) tabIosBtn.addEventListener('click', () => switchToPlatform('ios'));
+
   function openModal(modalEl) {
-    modalEl.classList.add('active');
+    if (modalEl) modalEl.classList.add('active');
   }
 
   function closeModal(modalEl) {
-    modalEl.classList.remove('active');
+    if (modalEl) modalEl.classList.remove('active');
   }
 
-  [settingsModal, guideModal].forEach(m => {
+  [settingsModal, guideModal, installModal].filter(Boolean).forEach(m => {
     m.addEventListener('click', (e) => {
       if (e.target === m) closeModal(m);
     });
@@ -708,5 +1131,185 @@ function doGet(e) {
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
+  }
+
+  // ================= AUTHENTICATION / APP LOCK SYSTEM =================
+  function isAuthenticated() {
+    try {
+      return localStorage.getItem(AUTH_STORAGE_KEY) === AUTH_TOKEN_VAL ||
+             sessionStorage.getItem(AUTH_STORAGE_KEY) === AUTH_TOKEN_VAL;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function initAuth() {
+    if (isAuthenticated()) {
+      unlockAppUI({ silent: true });
+    } else {
+      lockAppUI({ silent: true });
+    }
+
+    if (loginForm) {
+      loginForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        handleLoginAttempt();
+      });
+    }
+
+    if (loginSubmitBtn) {
+      loginSubmitBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        handleLoginAttempt();
+      });
+    }
+
+    if (loginPassword) {
+      loginPassword.addEventListener('input', () => {
+        if (loginErrorMsg) loginErrorMsg.style.display = 'none';
+        loginPassword.classList.remove('is-invalid');
+      });
+      loginPassword.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          e.stopPropagation();
+          handleLoginAttempt();
+        }
+      });
+    }
+
+    if (togglePasswordBtn && loginPassword) {
+      togglePasswordBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const isPassword = loginPassword.type === 'password';
+        loginPassword.type = isPassword ? 'text' : 'password';
+        if (eyeIconOpen && eyeIconClosed) {
+          eyeIconOpen.style.display = isPassword ? 'none' : 'block';
+          eyeIconClosed.style.display = isPassword ? 'block' : 'none';
+        }
+        loginPassword.focus();
+      });
+    }
+
+    if (lockAppBtn) {
+      lockAppBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        lockApp();
+      });
+    }
+  }
+
+  function handleLoginAttempt() {
+    if (!loginPassword) return;
+    const rawVal = loginPassword.value || '';
+    const enteredPassword = rawVal.trim();
+
+    if (!enteredPassword) {
+      showLoginError('Please enter the password.');
+      return;
+    }
+
+    // Match case-insensitively for mobile convenience (e.g. malcpak, Malcpak)
+    if (enteredPassword.toLowerCase() === APP_PASSWORD.toLowerCase()) {
+      // Correct password
+      if (loginSubmitBtn && loginBtnText) {
+        loginSubmitBtn.classList.add('success');
+        loginBtnText.textContent = 'Access Granted ✓';
+      }
+
+      // Save authentication state
+      try {
+        if (loginRememberMe && loginRememberMe.checked) {
+          localStorage.setItem(AUTH_STORAGE_KEY, AUTH_TOKEN_VAL);
+          sessionStorage.removeItem(AUTH_STORAGE_KEY);
+        } else {
+          sessionStorage.setItem(AUTH_STORAGE_KEY, AUTH_TOKEN_VAL);
+          localStorage.removeItem(AUTH_STORAGE_KEY);
+        }
+      } catch (e) {
+        console.warn('Storage access warning:', e);
+      }
+
+      setTimeout(() => {
+        unlockAppUI({ silent: false });
+        if (loginSubmitBtn && loginBtnText) {
+          loginSubmitBtn.classList.remove('success');
+          loginBtnText.textContent = 'Unlock App';
+        }
+        loginPassword.value = '';
+      }, 350);
+
+    } else {
+      // Incorrect password
+      showLoginError('Incorrect password. Please try again.');
+    }
+  }
+
+  function showLoginError(msg) {
+    if (loginErrorMsg && loginErrorText) {
+      loginErrorText.textContent = msg;
+      loginErrorMsg.style.display = 'flex';
+    }
+    if (loginPassword) {
+      loginPassword.classList.add('is-invalid');
+      loginPassword.focus();
+      loginPassword.select();
+    }
+    if (loginCard) {
+      loginCard.classList.remove('shake');
+      void loginCard.offsetWidth; // Trigger reflow for re-animation
+      loginCard.classList.add('shake');
+    }
+  }
+
+  function unlockAppUI({ silent = false } = {}) {
+    document.documentElement.classList.add('is-authenticated');
+    if (loginOverlay) {
+      loginOverlay.style.opacity = '0';
+      loginOverlay.style.pointerEvents = 'none';
+      setTimeout(() => {
+        loginOverlay.classList.remove('active');
+        loginOverlay.style.display = 'none';
+      }, 300);
+    }
+    if (!silent) {
+      showToast('Welcome! App unlocked successfully.', 'success');
+      setTimeout(() => {
+        if (regNoInput) regNoInput.focus();
+      }, 350);
+    }
+  }
+
+  function lockAppUI({ silent = false } = {}) {
+    document.documentElement.classList.remove('is-authenticated');
+    if (loginOverlay) {
+      loginOverlay.style.display = 'flex';
+      loginOverlay.style.pointerEvents = 'all';
+      void loginOverlay.offsetWidth;
+      loginOverlay.style.opacity = '1';
+      loginOverlay.classList.add('active');
+    }
+    if (loginPassword) {
+      loginPassword.value = '';
+      loginPassword.classList.remove('is-invalid');
+      setTimeout(() => loginPassword.focus(), 200);
+    }
+    if (loginErrorMsg) {
+      loginErrorMsg.style.display = 'none';
+    }
+  }
+
+  function lockApp() {
+    try {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      sessionStorage.removeItem(AUTH_STORAGE_KEY);
+    } catch (e) {}
+
+    lockAppUI();
+    showToast('App locked. You have signed out.', 'info');
   }
 });
