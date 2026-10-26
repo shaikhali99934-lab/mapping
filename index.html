@@ -3,13 +3,17 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
   <title>Field Mapping | Offline Mobile Data Entry</title>
   <meta name="description"
     content="Field Mapping offline-first data collection form with 1-tap GPS coordinates. Saves entries locally without internet and auto-syncs to Google Sheets when back online.">
   <link rel="icon" type="image/png" href="malc logo.png">
   <link rel="apple-touch-icon" href="malc logo.png">
   <meta name="apple-mobile-web-app-title" content="Field Mapping">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="theme-color" content="#f8fafc">
   <link rel="manifest" href="manifest.json">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -17,9 +21,6 @@
     href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
     rel="stylesheet">
   <link rel="stylesheet" href="style.css">
-  <meta name="theme-color" content="#f1f5f9">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <script>
     (function () {
       try {
@@ -156,25 +157,29 @@
       </div>
     </div>
 
-    <!-- Mobile Navigation Tab Switcher -->
-    <nav class="mobile-tabs" aria-label="Views">
-      <button type="button" class="tab-btn active" id="tabEntryBtn">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-          <path d="M12 20h9"></path>
-          <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
-        </svg>
-        <span>New Entry</span>
+    <!-- Android Bottom Navigation Bar -->
+    <nav class="mobile-tabs" id="mobileNavTabs" aria-label="Main Navigation">
+      <button type="button" class="tab-btn active" id="tabEntryBtn" aria-label="New Entry Tab">
+        <div class="tab-pill">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M12 20h9"></path>
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+          </svg>
+        </div>
+        <span class="tab-label">New Entry</span>
       </button>
 
-      <button type="button" class="tab-btn" id="tabHistoryBtn">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-          <polyline points="14 2 14 8 20 8"></polyline>
-          <line x1="16" y1="13" x2="8" y2="13"></line>
-          <line x1="16" y1="17" x2="8" y2="17"></line>
-        </svg>
-        <span>History</span>
-        <span class="tab-count-badge" id="tabRecordCount">0</span>
+      <button type="button" class="tab-btn" id="tabHistoryBtn" aria-label="Records History Tab">
+        <div class="tab-pill">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+          </svg>
+          <span class="tab-count-badge" id="tabRecordCount">0</span>
+        </div>
+        <span class="tab-label">Records</span>
       </button>
     </nav>
 
@@ -534,6 +539,7 @@
   <!-- Settings Modal -->
   <div id="settingsModal" class="modal-backdrop">
     <div class="modal-card glass-card">
+      <div class="bottom-sheet-drag-handle" aria-hidden="true"></div>
       <div class="modal-header">
         <div class="flex-center gap-2">
           <div class="modal-icon-badge">
@@ -580,6 +586,7 @@
   <!-- Setup Guide Modal -->
   <div id="guideModal" class="modal-backdrop">
     <div class="modal-card modal-wide glass-card">
+      <div class="bottom-sheet-drag-handle" aria-hidden="true"></div>
       <div class="modal-header">
         <div class="flex-center gap-2">
           <div class="modal-icon-badge google-green">
@@ -651,6 +658,7 @@
   <!-- Add to Mobile Home Screen Modal -->
   <div id="installModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="installModalTitle">
     <div class="modal-card glass-modal install-modal-box">
+      <div class="bottom-sheet-drag-handle" aria-hidden="true"></div>
       <div class="modal-header">
         <div class="modal-title-with-icon">
           <div class="modal-logo-frame">

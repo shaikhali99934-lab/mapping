@@ -59,7 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const tableContainer = document.getElementById('tableContainer');
   const cardsContainer = document.getElementById('cardsContainer');
 
-  let currentHistoryView = localStorage.getItem('field_mapping_view_pref') || 'table';
+  let currentHistoryView = localStorage.getItem('field_mapping_view_pref') || (window.innerWidth < 768 ? 'cards' : 'table');
   let historySearchTerm = '';
 
   // Mobile Tabs
@@ -334,7 +334,9 @@ function doGet(e) {
       tabEntryBtn.classList.remove('active');
       viewHistorySection.classList.remove('mobile-hidden');
       viewFormSection.classList.add('mobile-hidden');
+      renderHistoryTable();
     }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   // ================= SATELLITE GPS ACQUISITION (WORKS 100% OFFLINE) =================
